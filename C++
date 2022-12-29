@@ -1,1 +1,50 @@
+#include <iostream>
+
+int main()
+{
+    int* arr = nullptr;
+    int length = 0;
+
+    std::cout << "Enter values for the array (enter -1 to stop):" << std::endl;
+
+    // Read values from the user until they enter -1
+    int value;
+    std::cin >> value;
+    while (value != -1)
+    {
+        // Allocate new memory for the modified array
+        int* new_arr = new int[length + 1];
+
+        // Copy the old array into the new array
+        for (int i = 0; i < length; i++)
+        {
+            new_arr[i] = arr[i];
+        }
+
+        // Add the new value to the array
+        new_arr[length] = value;
+
+        // Deallocate the old array
+        delete[] arr;
+
+        // Set the old array pointer to the new array
+        arr = new_arr;
+        length++;
+
+        // Read the next value from the user
+        std::cin >> value;
+    }
+
+    // Print the array
+    for (int i = 0; i < length; i++)
+    {
+        std::cout << arr[i] << " ";
+    }
+    std::cout << std::endl;
+
+    // Deallocate the array
+    delete[] arr;
+
+    return 0;
+}
 
