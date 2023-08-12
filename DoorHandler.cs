@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class AllDores : MonoBehaviour
+public class DoorHandler : MonoBehaviour
 {
 
     public Quaternion startQuaternion;
