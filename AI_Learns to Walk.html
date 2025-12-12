@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Evolution: Fixed Layout</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background: #111; color: #eee;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+        }
+        
+        /* --- SIDEBAR FIXED TO RIGHT --- */
+        #info {
+            position: absolute; 
+            top: 10px; 
+            right: 10px; /* MOVED TO RIGHT */
+            left: auto;  /* Unset Left */
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.9); 
+            padding: 15px;
+            border-radius: 8px; 
+            border: 1px solid #444; 
+            width: 320px;
+            box-shadow: -4px 4px 15px rgba(0,0,0,0.6);
+            max-height: 95vh; 
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        
+        #info::-webkit-scrollbar { width: 6px; }
+        #info::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        h1 { margin: 0 0 10px 0; font-size: 18px; color: #00ffcc; text-transform: uppercase; letter-spacing: 1px; text-align: center;}
+        
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 10px; font-size: 13px;}
+        .stat-box { background: #222; padding: 5px; border-radius: 4px; border: 1px solid #333; }
+        .highlight { color: #ff0055; font-weight: bold; }
+        .success { color: #00ffcc; font-weight: bold; }
+        .record { color: #ffff00; font-weight: bold; }
+        .finished { color: #55ff00; text-shadow: 0 0 5px #55ff00; }
+
+        /* Settings Inputs */
+        .settings-header { 
+            color: #00ffcc; font-weight:bold; margin: 12px 0 6px 0; 
+            font-size:13px; border-bottom: 1px solid #333; padding-bottom: 2px;
+        }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; pointer-events: auto; }
+        
+        input[type="number"] {
+            width: 50px; background: #333; border: 1px solid #555; color: #fff;
+            padding: 3px; border-radius: 3px; text-align: center;
+        }
+        input[type="range"] { width: 90px; cursor: pointer; accent-color: #00ffcc; }
+        label { color: #bbb; }
+
+        /* Buttons */
+        .btn-row { display: flex; gap: 5px; margin-top: 5px; pointer-events: auto; }
+        .btn {
+            background: #333; border: 1px solid #555; color: #fff;
+            padding: 8px 10px; cursor: pointer; font-size: 12px;
+            border-radius: 4px; flex: 1; text-align: center; transition: all 0.2s;
+        }
+        .btn:hover { background: #555; }
+        .btn.active { background: #00ffcc; color: #000; font-weight: bold; border-color: #00ffcc; }
+        .btn.danger { background: #552222; border-color: #773333; }
+        .btn.danger:hover { background: #772222; }
+        
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+
+<div id="info">
+    <h1>🧬 Evo Studio</h1>
+    
+    <div class="btn-row" style="margin-bottom: 10px;">
+        <div class="btn" id="btnPause" onclick="togglePause()">⏸ Pause</div>
+        <div class="btn danger" onclick="resetSim()">↺ Reset</div>
+    </div>
+
+    <div class="setting-row">
+        <label>Zoom Camera</label>
+        <input id="zoomInput" type="range" min="0.5" max="3.0" step="0.1" value="1.0" oninput="updateZoom()">
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-box">Gen: <span id="genDisplay" class="success">1</span></div>
+        <div class="stat-box">Alive: <span id="aliveDisplay">0</span></div>
+        <div class="stat-box">Time: <span id="timerDisplay">20</span>s</div>
+        <div class="stat-box">Record: <span id="recordDisplay" class="record">0m</span></div>
+        <div class="stat-box" style="grid-column: span 2; text-align:center;">
+            Status: <span id="statusDisplay">Running</span>
+        </div>
+    </div>
+
+    <div class="settings-header">⚙️ Sim Options (Next Gen)</div>
+    <div class="setting-row">
+        <label>Population Size</label>
+        <input id="optPop" type="number" value="40" min="10" max="100">
+    </div>
+    <div class="setting-row">
+        <label>Round Time (s)</label>
+        <input id="optTime" type="number" value="20" min="10" max="60">
+    </div>
+    <div class="setting-row">
+        <label>Mutation Rate</label>
+        <input id="optMut" type="number" value="0.05" step="0.01" min="0.01" max="1.0">
+    </div>
+
+    <div class="settings-header">🏆 Rewards & Penalties</div>
+    <div class="setting-row">
+        <label>Distance (pts/m)</label>
+        <input id="rewardDist" type="number" value="1.0" step="0.1">
+    </div>
+    <div class="setting-row">
+        <label>Backward (Penalty)</label>
+        <input id="penaltyBack" type="number" value="2.0" step="0.1">
+    </div>
+    <div class="setting-row">
+        <label>Finish Bonus (Pts)</label>
+        <input id="rewardFinish" type="number" value="5000" step="100">
+    </div>
+    <div class="setting-row">
+        <label>Speed Bonus (Multiplier)</label>
+        <input id="rewardTime" type="number" value="100.0" step="10">
+    </div>
+
+    <div class="btn-row" style="margin-top:15px;">
+        <div class="btn active" onclick="setSpeed(1)">1x</div>
+        <div class="btn" onclick="setSpeed(5)">5x</div>
+        <div class="btn" onclick="setSpeed(20)">20x</div>
+        <div class="btn" onclick="setSpeed(50)">MAX</div>
+    </div>
+</div>
+
+<script>
+/**
+ * CONFIGURATION
+ */
+let CONFIG = {
+    populationSize: 40,      
+    mutationRate: 0.05,      
+    mutationAmount: 0.25,     
+    secondsPerGen: 20,       
+    finishDistance: 100,     
+    scale: 10,               
+    inputNodes: 7,           
+    hiddenNodes: 10,          
+    outputNodes: 4,          
+    gravity: 1,
+    floorY: window.innerHeight - 50, // This is the Surface Y Level
+    startX: 200              
+};
+
+let zoomLevel = 1.0;
+let isPaused = false;
+let allTimeBestDist = 0;
+let bestBrain = null; 
+
+function updateZoom() {
+    zoomLevel = parseFloat(document.getElementById('zoomInput').value);
+}
+
+function togglePause() {
+    isPaused = !isPaused;
+    const btn = document.getElementById('btnPause');
+    btn.innerText = isPaused ? "▶ Resume" : "⏸ Pause";
+    btn.style.background = isPaused ? "#555" : "#333";
+}
+
+function resetSim() {
+    generation = 1;
+    allTimeBestDist = 0;
+    bestBrain = null;
+    document.getElementById('recordDisplay').innerText = "0m";
+    initGen();
+}
+
+// --- 1. NEURAL NETWORK ---
+class NeuralNetwork {
+    constructor(input, hidden, output) {
+        this.input = input;
+        this.hidden = hidden;
+        this.output = output;
+        this.weightsIH = new Array(input * hidden).fill(0).map(() => Math.random() * 2 - 1);
+        this.weightsHO = new Array(hidden * output).fill(0).map(() => Math.random() * 2 - 1);
+        this.biasH = new Array(hidden).fill(0).map(() => Math.random() * 2 - 1);
+        this.biasO = new Array(output).fill(0).map(() => Math.random() * 2 - 1);
+    }
+
+    predict(inputArray) {
+        let hidden = [];
+        for (let i = 0; i < this.hidden; i++) {
+            let sum = 0;
+            for (let j = 0; j < this.input; j++) {
+                sum += inputArray[j] * this.weightsIH[j * this.hidden + i];
+            }
+            sum += this.biasH[i];
+            hidden[i] = Math.tanh(sum);
+        }
+        let output = [];
+        for (let i = 0; i < this.output; i++) {
+            let sum = 0;
+            for (let j = 0; j < this.hidden; j++) {
+                sum += hidden[j] * this.weightsHO[j * this.output + i];
+            }
+            sum += this.biasO[i];
+            output[i] = Math.tanh(sum);
+        }
+        return output;
+    }
+
+    mutate() {
+        const child = new NeuralNetwork(this.input, this.hidden, this.output);
+        const mutateVal = (val) => Math.random() < CONFIG.mutationRate ? val + (Math.random() * 2 - 1) * CONFIG.mutationAmount : val;
+        child.weightsIH = this.weightsIH.map(mutateVal);
+        child.weightsHO = this.weightsHO.map(mutateVal);
+        child.biasH = this.biasH.map(mutateVal);
+        child.biasO = this.biasO.map(mutateVal);
+        return child;
+    }
+    
+    clone() {
+        const child = new NeuralNetwork(this.input, this.hidden, this.output);
+        child.weightsIH = [...this.weightsIH];
+        child.weightsHO = [...this.weightsHO];
+        child.biasH = [...this.biasH];
+        child.biasO = [...this.biasO];
+        return child;
+    }
+}
+
+// --- 2. PHYSICS SETUP ---
+const Engine = Matter.Engine,
+      Render = Matter.Render,
+      Bodies = Matter.Bodies,
+      Composite = Matter.Composite,
+      Constraint = Matter.Constraint,
+      Body = Matter.Body,
+      Events = Matter.Events;
+
+const engine = Engine.create();
+engine.gravity.y = CONFIG.gravity;
+
+const render = Render.create({
+    element: document.body,
+    engine: engine,
+    options: {
+        width: window.innerWidth,
+        height: window.innerHeight,
+        wireframes: false,
+        background: '#111',
+        showAngleIndicator: false,
+        hasBounds: true 
+    }
+});
+
+// --- GROUND FIX ---
+// Made the ground much thicker (500px) so it looks like a solid block
+// The Center Y is adjusted so the Top Edge is exactly at CONFIG.floorY
+const groundThickness = 500;
+const ground = Bodies.rectangle(0, CONFIG.floorY + (groundThickness/2), 500000, groundThickness, { 
+    isStatic: true,
+    render: { fillStyle: '#222' },
+    friction: 1
+});
+Composite.add(engine.world, ground);
+
+// --- 3. CREATURE CLASS ---
+class Creature {
+    constructor(brain = null) {
+        this.brain = brain || new NeuralNetwork(CONFIG.inputNodes, CONFIG.hiddenNodes, CONFIG.outputNodes);
+        this.parts = [];
+        this.constraints = [];
+        this.isDead = false;
+        this.hasFinished = false;
+        this.fitness = 0;
+        this.distance = 0;
+        this.finishTimeRemaining = 0; 
+        
+        const startX = CONFIG.startX;
+        const startY = CONFIG.floorY - 150;
+
+        this.torso = Bodies.rectangle(startX, startY, 80, 20, { 
+            collisionFilter: { group: -1 },
+            render: { fillStyle: '#00ffcc' },
+            density: 0.002
+        });
+        this.parts.push(this.torso);
+
+        const legSpecs = [
+            { x: -30, len: 60, col: '#ff0055' }, 
+            { x: -15, len: 60, col: '#ff5500' }, 
+            { x:  15, len: 60, col: '#ff5500' }, 
+            { x:  30, len: 60, col: '#ff0055' }  
+        ];
+
+        this.legs = [];
+        legSpecs.forEach(spec => {
+            const leg = Bodies.rectangle(startX + spec.x, startY + 35, 10, spec.len, {
+                collisionFilter: { group: -1 },
+                friction: 1,
+                render: { fillStyle: spec.col }
+            });
+            this.legs.push(leg);
+            this.parts.push(leg);
+
+            const joint = Constraint.create({
+                bodyA: this.torso,
+                bodyB: leg,
+                pointA: { x: spec.x, y: 0 },
+                pointB: { x: 0, y: -spec.len/2 + 5 },
+                stiffness: 0.15,
+                length: 0,
+                render: { visible: true, lineWidth: 2, strokeStyle: '#444' }
+            });
+            this.constraints.push(joint);
+        });
+
+        Composite.add(engine.world, [this.torso, ...this.legs, ...this.constraints]);
+    }
+
+    checkHealth() {
+        if (this.isDead || this.hasFinished) return;
+        if (Math.abs(this.torso.angle) > 1.5 || this.torso.position.y > CONFIG.floorY - 15) {
+            this.kill();
+        }
+    }
+
+    kill() {
+        this.isDead = true;
+        this.torso.render.fillStyle = '#444';
+        this.legs.forEach(l => l.render.fillStyle = '#333');
+        this.constraints.forEach(c => c.render.strokeStyle = '#222');
+        this.calculateFitness(); 
+    }
+
+    think() {
+        if (this.isDead || this.hasFinished) return;
+
+        const inputs = [
+            this.torso.angle / 3.14,
+            (CONFIG.floorY - this.torso.position.y) / 200,
+            this.torso.velocity.y,
+            ...this.legs.map(l => (l.angle - this.torso.angle) / 3.14)
+        ];
+
+        const outputs = this.brain.predict(inputs);
+
+        for (let i = 0; i < this.legs.length; i++) {
+            const force = outputs[i] * 0.08; 
+            Body.setAngularVelocity(this.legs[i], this.legs[i].angularVelocity + force);
+            Body.setAngularVelocity(this.torso, this.torso.angularVelocity - (force * 0.25));
+        }
+
+        this.calculateFitness();
+    }
+
+    calculateFitness() {
+        const rDist = parseFloat(document.getElementById('rewardDist').value) || 1;
+        const pBack = parseFloat(document.getElementById('penaltyBack').value) || 2;
+        const rFinish = parseFloat(document.getElementById('rewardFinish').value) || 5000;
+        const rTime = parseFloat(document.getElementById('rewardTime').value) || 100;
+
+        this.distance = (this.torso.position.x - CONFIG.startX) / CONFIG.scale; 
+
+        if (this.distance > allTimeBestDist) {
+            allTimeBestDist = this.distance;
+            document.getElementById('recordDisplay').innerText = allTimeBestDist.toFixed(1) + "m";
+        }
+        
+        if (this.distance >= CONFIG.finishDistance && !this.hasFinished) {
+            this.hasFinished = true;
+            this.torso.render.fillStyle = '#fff';
+            this.finishTimeRemaining = Math.max(0, CONFIG.secondsPerGen - (frameCount / 60));
+        }
+
+        if (this.hasFinished) {
+            this.fitness = rFinish + (this.finishTimeRemaining * rTime);
+        } else {
+            if (this.distance >= 0) {
+                this.fitness = this.distance * rDist; 
+            } else {
+                this.fitness = this.distance * pBack; 
+            }
+        }
+    }
+
+    destroy() {
+        Composite.remove(engine.world, this.parts);
+        Composite.remove(engine.world, this.constraints);
+    }
+}
+
+// --- 4. GAME LOOP ---
+let population = [];
+let generation = 1;
+let frameCount = 0;
+let simSpeed = 1;
+
+function setSpeed(n) {
+    simSpeed = n;
+    document.querySelectorAll('.btn-row .btn').forEach(b => {
+        if(b.onclick && b.onclick.toString().includes('setSpeed')) b.classList.remove('active');
+    });
+    event.target.classList.add('active');
+}
+
+function initGen() {
+    CONFIG.populationSize = parseInt(document.getElementById('optPop').value) || 40;
+    CONFIG.secondsPerGen = parseInt(document.getElementById('optTime').value) || 20;
+    CONFIG.mutationRate = parseFloat(document.getElementById('optMut').value) || 0.05;
+
+    population.forEach(c => c.destroy());
+    population = [];
+
+    if (generation === 1) {
+        for (let i = 0; i < CONFIG.populationSize; i++) population.push(new Creature());
+    } else {
+        // Winner Takes All Evolution
+        const champion = new Creature(bestBrain.clone());
+        champion.torso.render.fillStyle = '#ffd700';
+        population.push(champion);
+        
+        for (let i = 1; i < CONFIG.populationSize; i++) {
+            population.push(new Creature(bestBrain.mutate()));
+        }
+    }
+    
+    frameCount = 0;
+    document.getElementById('genDisplay').innerText = generation;
+    document.getElementById('statusDisplay').innerText = "Running";
+    document.getElementById('statusDisplay').className = "";
+}
+
+function nextGen() {
+    population.sort((a, b) => b.fitness - a.fitness);
+    bestBrain = population[0].brain.clone();
+    generation++;
+    initGen();
+}
+
+// --- DRAW FLAGS (FIXED POSITION) ---
+function drawFlag(ctx, x, y, color, label, scale) {
+    const poleH = 80 * scale; 
+    const flagSize = 40 * scale;
+
+    // Pole
+    ctx.beginPath();
+    ctx.moveTo(x, y); // Starts exactly at the floor surface
+    ctx.lineTo(x, y - poleH);
+    ctx.lineWidth = 4 * scale;
+    ctx.strokeStyle = "#888";
+    ctx.stroke();
+    
+    // Base (Little circle to show planting)
+    ctx.beginPath();
+    ctx.arc(x, y, 3 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = "#888";
+    ctx.fill();
+
+    // Flag (Triangle)
+    ctx.beginPath();
+    ctx.moveTo(x, y - poleH);
+    ctx.lineTo(x + flagSize, y - (poleH - (flagSize/2)));
+    ctx.lineTo(x, y - (poleH - flagSize));
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1 * scale;
+    ctx.stroke();
+
+    // Text
+    ctx.fillStyle = "#fff";
+    ctx.font = `bold ${14 * scale}px Arial`;
+    ctx.fillText(label, x - (15*scale), y - poleH - (5*scale));
+}
+
+// --- RENDERING OVERLAYS ---
+Events.on(render, 'afterRender', function() {
+    const ctx = render.context;
+    const bounds = render.bounds;
+    const drawScale = Math.max(1, zoomLevel); 
+
+    // START FLAG
+    const startX = CONFIG.startX;
+    if(startX >= bounds.min.x - 100 && startX <= bounds.max.x + 100) {
+        // Draw exactly at CONFIG.floorY
+        drawFlag(ctx, startX, CONFIG.floorY, "#00ff00", "START", drawScale);
+    }
+
+    // FINISH FLAG
+    const finishX = CONFIG.startX + (CONFIG.finishDistance * CONFIG.scale);
+    if(finishX >= bounds.min.x - 100 && finishX <= bounds.max.x + 100) {
+        const poleH = 100 * drawScale;
+        
+        // Pole
+        ctx.beginPath(); 
+        ctx.moveTo(finishX, CONFIG.floorY); 
+        ctx.lineTo(finishX, CONFIG.floorY - poleH);
+        ctx.strokeStyle = "#fff"; 
+        ctx.lineWidth = 4 * drawScale; 
+        ctx.stroke();
+        
+        // Base
+        ctx.beginPath();
+        ctx.arc(finishX, CONFIG.floorY, 4 * drawScale, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff";
+        ctx.fill();
+
+        // Checkered Flag
+        ctx.fillStyle = "#ff0000";
+        ctx.fillRect(finishX, CONFIG.floorY - poleH, 60*drawScale, 40*drawScale);
+        
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(finishX, CONFIG.floorY - poleH, 30*drawScale, 20*drawScale);
+        ctx.fillRect(finishX + (30*drawScale), CONFIG.floorY - poleH + (20*drawScale), 30*drawScale, 20*drawScale);
+
+        ctx.font = `bold ${16 * drawScale}px Courier New`;
+        ctx.fillStyle = "#fff";
+        ctx.fillText("FINISH", finishX, CONFIG.floorY - poleH - (10*drawScale));
+    }
+});
+
+function loop() {
+    if(!isPaused) {
+        for(let i = 0; i < simSpeed; i++) {
+            Engine.update(engine, 1000 / 60);
+            
+            let aliveCount = 0;
+            
+            population.forEach(creature => {
+                creature.checkHealth();
+                creature.think();
+                if(!creature.isDead) aliveCount++;
+            });
+
+            frameCount++;
+            
+            if (frameCount > CONFIG.secondsPerGen * 60 || aliveCount === 0) {
+                nextGen();
+                break;
+            }
+        }
+        
+        const alive = population.filter(c => !c.isDead).length;
+        document.getElementById('aliveDisplay').innerText = alive;
+        
+        const timeLeft = Math.max(0, CONFIG.secondsPerGen - (frameCount / 60)).toFixed(1);
+        document.getElementById('timerDisplay').innerText = timeLeft;
+
+        let leader = population.reduce((prev, curr) => (curr.fitness > prev.fitness) ? curr : prev);
+        
+        const statusEl = document.getElementById('statusDisplay');
+        if(leader.hasFinished) {
+            statusEl.innerText = "WINNER (" + leader.finishTimeRemaining.toFixed(2) + "s left)";
+            statusEl.className = "finished";
+        } else {
+            statusEl.innerText = "Running (" + leader.distance.toFixed(1) + "m)";
+            statusEl.className = "";
+        }
+    }
+
+    let leader = population.reduce((prev, curr) => (curr.fitness > prev.fitness) ? curr : prev);
+    let camX = leader.torso.position.x;
+    
+    const viewWidth = window.innerWidth * zoomLevel;
+    const viewHeight = window.innerHeight * zoomLevel;
+    
+    Render.lookAt(render, {
+        min: { x: camX - (viewWidth * 0.3), y: CONFIG.floorY - (viewHeight * 0.6) },
+        max: { x: camX + (viewWidth * 0.7), y: CONFIG.floorY + (viewHeight * 0.4) }
+    });
+
+    Render.world(render);
+    requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize', () => {
+    render.canvas.width = window.innerWidth;
+    render.canvas.height = window.innerHeight;
+});
+
+initGen();
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
