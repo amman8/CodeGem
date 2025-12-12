@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predator vs Prey: Final Stable</title>
+    <style>
+        :root {
+            --primary: #00e5ff;
+            --danger: #ff2a6d;
+            --tired: #a34bf1;
+            --bg: #050510;
+            --panel: rgba(15, 20, 30, 0.95);
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--primary);
+        }
+        canvas { display: block; }
+        
+        /* UI Container */
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 260px;
+            background: var(--panel);
+            border: 1px solid #333;
+            border-left: 4px solid var(--danger);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.7);
+            user-select: none;
+            transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+            z-index: 10;
+        }
+
+        #ui-container.collapsed {
+            transform: translateX(-310px); 
+        }
+
+        /* Toggle Button */
+        #toggle-btn {
+            position: absolute;
+            right: -40px; 
+            top: 0;
+            width: 40px;
+            height: 40px;
+            background: var(--danger);
+            color: white;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            border-top-right-radius: 4px;
+            border-bottom-right-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+        }
+        #toggle-btn:hover { background: #ff5c8d; }
+
+        h2 {
+            font-size: 12px;
+            margin: 0 0 15px 0;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #8899ac;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 11px;
+            color: #aaa;
+            align-items: center;
+        }
+        .val { color: #fff; font-weight: 700; font-family: monospace; font-size: 12px; }
+        .danger-text { color: var(--danger); }
+        
+        /* Bars */
+        .bar-bg {
+            width: 80px;
+            height: 4px;
+            background: #222;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .bar-fill { height: 100%; background: var(--primary); width: 0%; transition: width 0.1s; }
+
+        /* Controls */
+        input[type=range] { width: 100%; margin: 5px 0 15px 0; accent-color: var(--danger); }
+        
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button {
+            flex: 1;
+            padding: 8px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid #444;
+            color: #ddd;
+            font-size: 10px;
+            text-transform: uppercase;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: 0.2s;
+        }
+        button:hover { border-color: var(--primary); color: var(--primary); }
+        button.active { background: var(--primary); color: #000; border-color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div id="ui-container">
+    <div id="toggle-btn">☰</div>
+
+    <h2>Simulation Stats</h2>
+    
+    <div class="stat-row">
+        <span>Generation</span>
+        <span id="gen-display" class="val">1</span>
+    </div>
+    <div class="stat-row">
+        <span>Survivors</span>
+        <span id="pop-display" class="val">0</span>
+    </div>
+    <div class="stat-row">
+        <span>Flock Density</span>
+        <div class="bar-bg"><div id="density-bar" class="bar-fill"></div></div>
+    </div>
+    <div class="stat-row">
+        <span>Round Timer</span>
+        <div class="bar-bg" style="width:100px"><div id="time-bar" class="bar-fill" style="background:#fff"></div></div>
+    </div>
+
+    <div style="margin-top:20px; border-top:1px solid #333; padding-top:10px;">
+        <div class="stat-row">
+            <span>Predators</span>
+            <span id="pred-val" class="val danger-text">2</span>
+        </div>
+        <input type="range" id="pred-slider" min="0" max="8" value="2">
+
+        <div class="stat-row">
+            <span>Round Length</span>
+            <span id="time-val" class="val">25s</span>
+        </div>
+        <input type="range" id="time-slider" min="10" max="60" value="25" step="5">
+    </div>
+
+    <div class="btn-group">
+        <button id="pause-btn">Pause</button>
+        <button id="reset-btn">Reset</button>
+    </div>
+</div>
+
+<canvas id="simCanvas"></canvas>
+
+<script>
+/**
+ * CONFIGURATION
+ */
+const CONFIG = {
+    boidCount: 160,
+    perceptionRadius: 60,
+    
+    // Speeds
+    maxSpeed: 4.0,
+    sprintSpeed: 9.5,     
+    tiredSpeed: 2.0,      
+    maxForce: 0.1,
+    
+    // Predator
+    predatorSpeed: 5.5,   
+    predatorAgility: 0.12, 
+    killRadius: 10,
+    predatorVision: 220, 
+    
+    // Stamina System
+    maxStamina: 3,         
+    rechargeRate: 200,     
+    sprintDuration: 40,    
+    
+    // Evolution
+    mutationRate: 0.15,
+    epochFrames: 1500 
+};
+
+// Application State
+let state = {
+    paused: false,
+    generation: 1,
+    frameCount: 0,
+    predatorCount: 2,
+    currentEpochLimit: 1500
+};
+
+let boids = [];
+let predators = [];
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+let width, height;
+
+/**
+ * VECTOR LIBRARY
+ */
+const Vec = {
+    new: (x, y) => ({x, y}),
+    add: (v1, v2) => ({x: v1.x + v2.x, y: v1.y + v2.y}),
+    sub: (v1, v2) => ({x: v1.x - v2.x, y: v1.y - v2.y}),
+    mult: (v, n) => ({x: v.x * n, y: v.y * n}),
+    div: (v, n) => {
+        // Safety check to prevent dividing by zero (The Disappearing Bug Fix)
+        if (n === 0) return {x:0, y:0};
+        return {x: v.x / n, y: v.y / n}
+    },
+    mag: (v) => Math.sqrt(v.x*v.x + v.y*v.y),
+    dist: (v1, v2) => Math.sqrt((v1.x-v2.x)**2 + (v1.y-v2.y)**2),
+    
+    norm: (v) => {
+        let m = Math.sqrt(v.x*v.x + v.y*v.y);
+        return m === 0 ? {x:0, y:0} : {x: v.x/m, y: v.y/m};
+    },
+    setMag: (v, n) => {
+        let m = Math.sqrt(v.x*v.x + v.y*v.y);
+        return m === 0 ? {x:0, y:0} : {x: (v.x/m)*n, y: (v.y/m)*n};
+    },
+    limit: (v, max) => {
+        let m = Math.sqrt(v.x*v.x + v.y*v.y);
+        return m > max ? {x: (v.x/m)*max, y: (v.y/m)*max} : v;
+    }
+};
+
+/**
+ * PREDATOR AI
+ */
+class Predator {
+    constructor() {
+        this.pos = Vec.new(Math.random()*width, Math.random()*height);
+        this.vel = Vec.new(Math.random()*2-1, Math.random()*2-1);
+        this.acc = Vec.new(0,0);
+        this.target = null;
+    }
+
+    update(boids, allPredators) {
+        // 1. SCANNING
+        let bestTarget = null;
+        let bestScore = Infinity; 
+
+        for (let b of boids) {
+            if (!b.alive) continue;
+            let d = Vec.dist(this.pos, b.pos);
+            
+            if (d < CONFIG.predatorVision) {
+                // Focus on closest, tired (stamina=0) birds
+                let tiredBonus = (b.stamina === 0) ? -60 : 0;
+                let score = d + (b.neighborCount * 10) + tiredBonus;
+                
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestTarget = b;
+                }
+            }
+        }
+        this.target = bestTarget;
+
+        // 2. CHASE
+        if (this.target) {
+            let desired = Vec.sub(this.target.pos, this.pos);
+            desired = Vec.setMag(desired, CONFIG.predatorSpeed);
+            let steer = Vec.sub(desired, this.vel);
+            
+            // Limit steering ability so dodging works better
+            steer = Vec.limit(steer, CONFIG.predatorAgility); 
+            
+            this.acc = Vec.add(this.acc, steer);
+
+            if (Vec.dist(this.pos, this.target.pos) < CONFIG.killRadius) {
+                this.target.alive = false;
+                this.target = null;
+            }
+        } else {
+            this.acc = Vec.add(this.acc, Vec.new(Math.random()-0.5, Math.random()-0.5));
+        }
+
+        // 3. SEPARATION
+        for (let other of allPredators) {
+            if (other !== this) {
+                let d = Vec.dist(this.pos, other.pos);
+                if (d < 80 && d > 0) { // Safety check
+                    let diff = Vec.sub(this.pos, other.pos);
+                    diff = Vec.setMag(diff, 0.5); 
+                    this.acc = Vec.add(this.acc, diff);
+                }
+            }
+        }
+
+        this.vel = Vec.add(this.vel, this.acc);
+        this.vel = Vec.limit(this.vel, CONFIG.predatorSpeed);
+        this.pos = Vec.add(this.pos, this.vel);
+        this.acc = Vec.new(0,0);
+
+        // Wall Bounce
+        if(this.pos.x < 0 || this.pos.x > width) this.vel.x *= -1;
+        if(this.pos.y < 0 || this.pos.y > height) this.vel.y *= -1;
+    }
+
+    draw() {
+        ctx.save();
+        
+        // 1. DRAW TARGET LINE
+        if (this.target && this.target.alive) {
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255, 42, 109, 0.4)'; // Red, semi-transparent
+            ctx.beginPath();
+            ctx.moveTo(this.pos.x, this.pos.y);
+            ctx.lineTo(this.target.pos.x, this.target.pos.y);
+            ctx.stroke();
+        }
+
+        // 2. Draw Predator Body
+        ctx.fillStyle = '#ff2a6d';
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(Math.atan2(this.vel.y, this.vel.x));
+        ctx.beginPath();
+        ctx.moveTo(14, 0);
+        ctx.lineTo(-10, 7);
+        ctx.lineTo(-10, -7);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+/**
+ * BOID AGENT (Prey)
+ */
+class Boid {
+    constructor(genes = null) {
+        this.pos = Vec.new(width/2 + (Math.random()*200-100), height/2 + (Math.random()*200-100));
+        this.vel = Vec.new(Math.random()*2-1, Math.random()*2-1);
+        this.acc = Vec.new(0,0);
+        this.alive = true;
+        this.neighborCount = 0; 
+
+        // Fitness Stats
+        this.framesAlive = 0;
+        this.totalNeighbors = 0;
+        
+        // --- STAMINA SYSTEM ---
+        this.stamina = CONFIG.maxStamina; 
+        this.rechargeTimer = 0;
+        this.sprintTimer = 0; 
+        this.justDodged = 0;  
+
+        if (genes) {
+            this.genes = {
+                sep: genes.sep + (Math.random()*CONFIG.mutationRate - CONFIG.mutationRate/2),
+                ali: genes.ali + (Math.random()*CONFIG.mutationRate - CONFIG.mutationRate/2),
+                coh: genes.coh + (Math.random()*CONFIG.mutationRate - CONFIG.mutationRate/2),
+                fear: genes.fear + (Math.random()*CONFIG.mutationRate - CONFIG.mutationRate/2)
+            };
+        } else {
+            this.genes = {
+                sep: 1.5 + Math.random(),
+                ali: 1.0 + Math.random(),
+                coh: 1.2 + Math.random(),
+                fear: 2.5 + Math.random()
+            };
+        }
+    }
+
+    applyBehaviors(boids, predators, flockCenter) {
+        if (!this.alive) return;
+
+        let sep = Vec.new(0,0), ali = Vec.new(0,0), coh = Vec.new(0,0);
+        let count = 0;
+        this.neighborCount = 0;
+
+        // 1. FLOCKING
+        for (let other of boids) {
+            if (other === this || !other.alive) continue;
+            let d = Vec.dist(this.pos, other.pos);
+            
+            if (d < 50) this.neighborCount++;
+
+            if (d < CONFIG.perceptionRadius && d > 0) { // Safety Check d > 0
+                let diff = Vec.sub(this.pos, other.pos);
+                diff = Vec.div(diff, d*d); // Normalized by distance squared
+                sep = Vec.add(sep, diff);
+                ali = Vec.add(ali, other.vel);
+                coh = Vec.add(coh, other.pos);
+                count++;
+            }
+        }
+
+        if (count > 0) {
+            ali = Vec.div(ali, count);
+            ali = Vec.setMag(ali, CONFIG.maxSpeed);
+            ali = Vec.sub(ali, this.vel);
+            ali = Vec.limit(ali, CONFIG.maxForce);
+
+            coh = Vec.div(coh, count);
+            coh = Vec.sub(coh, this.pos);
+            coh = Vec.setMag(coh, CONFIG.maxSpeed);
+            coh = Vec.sub(coh, this.vel);
+            coh = Vec.limit(coh, CONFIG.maxForce);
+
+            if (Vec.mag(sep) > 0) {
+                sep = Vec.setMag(sep, CONFIG.maxSpeed);
+                sep = Vec.sub(sep, this.vel);
+                sep = Vec.limit(sep, CONFIG.maxForce);
+            }
+        }
+
+        // 2. GLOBAL PULL
+        let global = Vec.sub(flockCenter, this.pos);
+        global = Vec.setMag(global, CONFIG.maxSpeed);
+        global = Vec.sub(global, this.vel);
+        global = Vec.limit(global, CONFIG.maxForce * 0.3);
+
+        // 3. PREDATOR EVASION & DODGE
+        let fear = Vec.new(0,0);
+        
+        for (let p of predators) {
+            let d = Vec.dist(this.pos, p.pos);
+            if (d < 120 && d > 0) { 
+                
+                // Base Fleeing
+                let flee = Vec.sub(this.pos, p.pos);
+                flee = Vec.div(flee, d); 
+                fear = Vec.add(fear, flee);
+
+                // **JUKE MECHANIC**
+                if (d < 50 && this.stamina > 0 && this.sprintTimer === 0 && this.justDodged === 0) {
+                    
+                    this.stamina--; 
+                    this.sprintTimer = CONFIG.sprintDuration; 
+                    this.justDodged = 15; 
+                    this.rechargeTimer = 0; 
+
+                    let approach = Vec.sub(p.pos, this.pos);
+                    let juke = {x: -approach.y, y: approach.x}; 
+                    juke = Vec.setMag(juke, CONFIG.maxSpeed * 10); 
+                    this.acc = Vec.add(this.acc, juke);
+                }
+            }
+        }
+
+        if (Vec.mag(fear) > 0) {
+            fear = Vec.setMag(fear, CONFIG.maxSpeed);
+            fear = Vec.sub(fear, this.vel);
+            fear = Vec.limit(fear, CONFIG.maxForce * 3.5);
+        }
+
+        // 4. APPLY GENES
+        sep = Vec.mult(sep, this.genes.sep);
+        ali = Vec.mult(ali, this.genes.ali);
+        coh = Vec.mult(coh, this.genes.coh);
+        fear = Vec.mult(fear, this.genes.fear);
+
+        // REUNITE LOGIC
+        if (this.stamina === 0) {
+            coh = Vec.mult(coh, 5.0); 
+            global = Vec.mult(global, 3.0);
+        }
+
+        this.acc = Vec.add(this.acc, sep);
+        this.acc = Vec.add(this.acc, ali);
+        this.acc = Vec.add(this.acc, coh);
+        this.acc = Vec.add(this.acc, fear);
+        this.acc = Vec.add(this.acc, global);
+
+        // Wall Avoidance
+        const margin = 50;
+        let wall = Vec.new(0,0);
+        if(this.pos.x < margin) wall.x = CONFIG.maxForce*2;
+        if(this.pos.x > width-margin) wall.x = -CONFIG.maxForce*2;
+        if(this.pos.y < margin) wall.y = CONFIG.maxForce*2;
+        if(this.pos.y > height-margin) wall.y = -CONFIG.maxForce*2;
+        this.acc = Vec.add(this.acc, wall);
+
+        // STATS
+        this.framesAlive++;
+        this.totalNeighbors += this.neighborCount;
+    }
+
+    update() {
+        if (!this.alive) return;
+
+        // Stamina Logic
+        if (this.sprintTimer > 0) {
+            this.sprintTimer--;
+        } else if (this.stamina < CONFIG.maxStamina) {
+            this.rechargeTimer++;
+            if (this.rechargeTimer > CONFIG.rechargeRate) {
+                this.stamina++;
+                this.rechargeTimer = 0;
+            }
+        }
+
+        if (this.justDodged > 0) this.justDodged--;
+
+        // Apply Physics
+        this.vel = Vec.add(this.vel, this.acc);
+        
+        // **SPEED LIMITS**
+        let limit = CONFIG.maxSpeed;
+        
+        if (this.sprintTimer > 0) {
+            limit = CONFIG.sprintSpeed; // Fast
+        } else if (this.stamina === 0) {
+            limit = CONFIG.tiredSpeed;  // FATIGUED
+        }
+        
+        this.vel = Vec.limit(this.vel, limit);
+        this.pos = Vec.add(this.pos, this.vel);
+        this.acc = Vec.new(0,0);
+
+        // Hard Bounds
+        if(this.pos.x<0) this.pos.x=0;
+        if(this.pos.x>width) this.pos.x=width;
+        if(this.pos.y<0) this.pos.y=0;
+        if(this.pos.y>height) this.pos.y=height;
+    }
+
+    draw() {
+        if (!this.alive) return;
+        ctx.save();
+        ctx.translate(this.pos.x, this.pos.y);
+        ctx.rotate(Math.atan2(this.vel.y, this.vel.x));
+        
+        // Colors
+        if (this.sprintTimer > 0) {
+            ctx.fillStyle = '#ffffff'; // White = Sprinting
+        } else if (this.stamina === 0) {
+            ctx.fillStyle = '#a34bf1'; // Purple = Exhausted
+        } else {
+            // Brightness depends on stamina charges
+            ctx.fillStyle = this.stamina === 3 ? '#00e5ff' : 
+                           this.stamina === 2 ? '#00b8cc' : '#008ba3';
+        }
+        
+        ctx.beginPath();
+        ctx.moveTo(8, 0);
+        ctx.lineTo(-5, 4);
+        ctx.lineTo(-5, -4);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+/**
+ * MAIN LOOP & UI
+ */
+const uiContainer = document.getElementById('ui-container');
+const toggleBtn = document.getElementById('toggle-btn');
+const uiGen = document.getElementById('gen-display');
+const uiPop = document.getElementById('pop-display');
+const uiDensity = document.getElementById('density-bar');
+const uiTime = document.getElementById('time-bar');
+const slidePred = document.getElementById('pred-slider');
+const slideTime = document.getElementById('time-slider');
+const dispPred = document.getElementById('pred-val');
+const dispTime = document.getElementById('time-val');
+
+// UI Toggle
+toggleBtn.addEventListener('click', () => {
+    uiContainer.classList.toggle('collapsed');
+});
+
+function resize() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+
+function init() {
+    resize();
+    boids = [];
+    state.generation = 1;
+    state.frameCount = 0;
+    
+    for(let i=0; i<CONFIG.boidCount; i++) boids.push(new Boid());
+    spawnPredators();
+}
+
+function spawnPredators() {
+    predators = [];
+    for(let i=0; i<state.predatorCount; i++) predators.push(new Predator());
+}
+
+function evolve() {
+    let survivors = boids.filter(b => b.alive);
+    survivors.sort((a,b) => (b.framesAlive + b.totalNeighbors*0.1) - (a.framesAlive + a.totalNeighbors*0.1));
+
+    let newPop = [];
+    if (survivors.length === 0) {
+        for(let i=0; i<CONFIG.boidCount; i++) newPop.push(new Boid());
+    } else {
+        for(let i=0; i<CONFIG.boidCount; i++) {
+            let parent = survivors[i % survivors.length];
+            newPop.push(new Boid(parent.genes));
+        }
+    }
+    
+    boids = newPop;
+    state.generation++;
+    
+    boids.forEach(b => {
+        b.pos = Vec.new(width/2 + (Math.random()*200-100), height/2 + (Math.random()*200-100));
+    });
+    spawnPredators();
+}
+
+function loop() {
+    if (!state.paused) {
+        ctx.fillStyle = 'rgba(5, 5, 16, 0.25)';
+        ctx.fillRect(0, 0, width, height);
+
+        let living = boids.filter(b => b.alive);
+        
+        let center = Vec.new(0,0);
+        let totalNeighborsAll = 0; // For UI logic
+        
+        for(let b of living) {
+            center = Vec.add(center, b.pos);
+            totalNeighborsAll += b.neighborCount;
+        }
+        
+        if(living.length) center = Vec.div(center, living.length);
+        else center = Vec.new(width/2, height/2);
+
+        // Update Predators
+        predators.forEach(p => {
+            p.update(boids, predators);
+            p.draw();
+        });
+
+        // Update Boids
+        boids.forEach(b => {
+            b.applyBehaviors(boids, predators, center);
+            b.update();
+            b.draw();
+        });
+
+        // UI & Logic
+        state.frameCount++;
+        if (state.frameCount % 5 === 0) {
+            uiGen.innerText = state.generation;
+            uiPop.innerText = `${living.length}/${CONFIG.boidCount}`;
+            
+            // --- FIXED DENSITY CALC ---
+            let avgDens = living.length ? totalNeighborsAll / living.length : 0;
+            uiDensity.style.width = Math.min(100, avgDens * 10) + "%";
+            
+            let timePct = 100 - (state.frameCount / state.currentEpochLimit * 100);
+            uiTime.style.width = Math.max(0, timePct) + "%";
+        }
+
+        // Logic Change: Only reset if time is up OR everyone is dead (0).
+        if (state.frameCount > state.currentEpochLimit || living.length === 0) {
+            evolve();
+            state.frameCount = 0;
+        }
+    }
+    requestAnimationFrame(loop);
+}
+
+// Events
+slidePred.addEventListener('input', e => {
+    state.predatorCount = parseInt(e.target.value);
+    dispPred.innerText = state.predatorCount;
+    spawnPredators();
+});
+slideTime.addEventListener('input', e => {
+    let s = parseInt(e.target.value);
+    state.currentEpochLimit = s * 60;
+    dispTime.innerText = s + "s";
+});
+document.getElementById('pause-btn').onclick = function() {
+    state.paused = !state.paused;
+    this.classList.toggle('active');
+};
+document.getElementById('reset-btn').onclick = init;
+
+init();
+loop();
+</script>
+</body>
+</html>
