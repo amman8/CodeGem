@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Car: Editor & Pro Levels</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #0b0b0b; color: #fff; font-family: monospace; overflow: hidden; }
+        #canvas-container { width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+        
+        /* UI Panel */
+        #ui {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(15, 15, 15, 0.95);
+            padding: 15px; border-radius: 8px;
+            border-left: 5px solid #00d2ff;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.6);
+            pointer-events: auto;
+            min-width: 280px;
+            user-select: none;
+            z-index: 100;
+        }
+
+        h1 { margin: 0 0 10px 0; font-size: 1.1rem; color: #fff; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.85rem; color: #aaa; }
+        .val { font-weight: bold; color: #fff; }
+        .lead-stat { color: #00d2ff; font-weight: bold; }
+
+        /* Controls */
+        .controls { margin-top: 15px; padding-top: 10px; border-top: 1px solid #333; }
+        select, button { width: 100%; padding: 6px; background: #222; color: white; border: 1px solid #444; border-radius: 4px; margin-bottom: 8px; cursor: pointer; }
+        button:hover { background: #333; }
+        input[type=range] { width: 100%; margin: 5px 0; cursor: pointer; accent-color: #00d2ff; }
+
+        /* Custom Editor Panel */
+        #editor-panel {
+            display: none; /* Hidden by default */
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            border: 1px solid #444;
+        }
+        #editor-panel label { font-size: 0.75rem; color: #bbb; display: block; margin-top: 5px; }
+
+        /* Pause Overlay */
+        #pause-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none; justify-content: center; align-items: center;
+            font-size: 3rem; font-weight: bold; pointer-events: none;
+            z-index: 50;
+        }
+        
+        #finish-msg {
+            position: absolute; top: 30%; width: 100%; text-align: center;
+            font-size: 4rem; color: #00ff88; font-weight: 900;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+            display: none; pointer-events: none; transform: rotate(-5deg);
+            z-index: 200;
+        }
+    </style>
+</head>
+<body>
+
+<div id="finish-msg">LEVEL COMPLETE!</div>
+<div id="pause-overlay">PAUSED</div>
+
+<div id="ui">
+    <h1>NEUROEVOLUTION</h1>
+    
+    <select id="level-select" onchange="changeLevel(this.value)">
+        <option value="1">Lvl 1: Rolling Hills (Easy)</option>
+        <option value="2">Lvl 2: The Jagged Peaks (Hard)</option>
+        <option value="3">Lvl 3: The Canyon (Expert)</option>
+        <option value="custom">🛠️ Custom Map Editor</option>
+    </select>
+    
+    <div style="display: flex; gap: 5px;">
+        <button onclick="togglePause()">⏯️ Pause</button>
+        <button onclick="changeLevel(document.getElementById('level-select').value)">🔄 Restart</button>
+    </div>
+
+    <div id="editor-panel">
+        <div style="text-align: center; color: #00d2ff; font-weight: bold; margin-bottom: 5px;">MAP EDITOR</div>
+        <label>Roughness (Jaggedness)</label>
+        <input type="range" id="edit-rough" min="0" max="1.5" step="0.1" value="0.5">
+        
+        <label>Hill Height (Amplitude)</label>
+        <input type="range" id="edit-amp" min="0" max="2.0" step="0.1" value="1.0">
+        
+        <label>Segment Width</label>
+        <input type="range" id="edit-width" min="30" max="150" step="10" value="80">
+        
+        <button style="margin-top: 10px; background: #005533;" onclick="generateCustomMap()">Generate Map</button>
+    </div>
+
+    <div class="stat-row" style="margin-top:10px;"><span>Gen:</span> <span id="gen-val" class="val">1</span></div>
+    <div class="stat-row"><span>Alive:</span> <span id="alive-val" class="val">0</span></div>
+    <div class="stat-row"><span>Lead:</span> <span id="current-lead-val" class="lead-stat">0m</span></div>
+    <div class="stat-row"><span>Record:</span> <span id="record-val" class="val">0m</span></div>
+    
+    <div class="controls">
+        <label>Training Speed: <span id="speed-label" style="color: #00d2ff">1x</span></label>
+        <input type="range" min="1" max="25" value="1" oninput="updateSpeed(this.value)">
+    </div>
+</div>
+
+<div id="canvas-container"></div>
+
+<script>
+    // ================= CONFIGURATION =================
+    const FINISH_LINE_X = 5000;
+    const POPULATION_SIZE = 40;
+    const MUTATION_RATE = 0.08;
+    
+    let physicsSpeed = 1;
+    let globalRecordDist = 0;
+    let currentLevel = "1";
+    let isPaused = false;
+    let frameTimer = 0;
+
+    // ================= NEURAL NETWORK =================
+    class NeuralNetwork {
+        constructor(inputCount, hiddenCount, outputCount) {
+            this.inputCount = inputCount;
+            this.hiddenCount = hiddenCount;
+            this.outputCount = outputCount;
+            this.w1 = new Float32Array(inputCount * hiddenCount);
+            this.w2 = new Float32Array(hiddenCount * outputCount);
+            this.b1 = new Float32Array(hiddenCount);
+            this.b2 = new Float32Array(outputCount);
+            this.randomize();
+        }
+        randomize() {
+            const rand = () => Math.random() * 2 - 1;
+            for(let i=0; i<this.w1.length; i++) this.w1[i] = rand();
+            for(let i=0; i<this.w2.length; i++) this.w2[i] = rand();
+            for(let i=0; i<this.b1.length; i++) this.b1[i] = rand();
+            for(let i=0; i<this.b2.length; i++) this.b2[i] = rand();
+        }
+        clone() {
+            let c = new NeuralNetwork(this.inputCount, this.hiddenCount, this.outputCount);
+            c.w1.set(this.w1); c.w2.set(this.w2);
+            c.b1.set(this.b1); c.b2.set(this.b2);
+            return c;
+        }
+        mutate(rate) {
+            const mut = (v) => Math.random() < rate ? v + (Math.random() * 0.4 - 0.2) : v;
+            for(let i=0; i<this.w1.length; i++) this.w1[i] = mut(this.w1[i]);
+            for(let i=0; i<this.w2.length; i++) this.w2[i] = mut(this.w2[i]);
+            for(let i=0; i<this.b1.length; i++) this.b1[i] = mut(this.b1[i]);
+            for(let i=0; i<this.b2.length; i++) this.b2[i] = mut(this.b2[i]);
+        }
+        predict(inputs) {
+            let hidden = new Float32Array(this.hiddenCount);
+            for (let j = 0; j < this.hiddenCount; j++) {
+                let sum = 0;
+                for (let i = 0; i < this.inputCount; i++) sum += inputs[i] * this.w1[i * this.hiddenCount + j];
+                hidden[j] = Math.tanh(sum + this.b1[j]);
+            }
+            let outputs = [];
+            for (let j = 0; j < this.outputCount; j++) {
+                let sum = 0;
+                for (let i = 0; i < this.hiddenCount; i++) sum += hidden[i] * this.w2[i * this.outputCount + j];
+                outputs[j] = Math.tanh(sum + this.b2[j]);
+            }
+            return outputs;
+        }
+    }
+
+    // ================= PHYSICS ENGINE =================
+    const { Engine, Render, Composite, Bodies, Body, Vector, Constraint } = Matter;
+    const engine = Engine.create();
+    const world = engine.world;
+    engine.positionIterations = 8;
+    engine.velocityIterations = 8;
+
+    const render = Render.create({
+        element: document.getElementById('canvas-container'),
+        engine: engine,
+        options: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            wireframes: false,
+            background: '#0b0b0b',
+            hasBounds: true
+        }
+    });
+
+    // ================= CAR CLASS =================
+    class Car {
+        constructor(brain = null, isChamp = false) {
+            this.brain = brain ? brain.clone() : new NeuralNetwork(5, 8, 2);
+            if(brain && !isChamp) this.brain.mutate(MUTATION_RATE);
+            
+            this.alive = true;
+            this.finished = false;
+            this.fuel = 400;
+            this.maxDist = 0;
+            
+            const col = isChamp ? '#ff0055' : '#00d2ff';
+            const startX = 100, startY = window.innerHeight - 300;
+            const CAR_GROUP = -1; // Shared group prevents car-to-car collision
+            
+            this.chassis = Bodies.trapezoid(startX, startY, 60, 25, 0.3, {
+                collisionFilter: { group: CAR_GROUP },
+                density: 0.002, friction: 0.5,
+                render: { fillStyle: col }
+            });
+
+            this.w1 = Bodies.circle(startX + 25, startY + 20, 13, {
+                collisionFilter: { group: CAR_GROUP },
+                friction: 1.0, density: 0.02, restitution: 0.1,
+                render: { fillStyle: '#333', strokeStyle: '#555', lineWidth: 2 }
+            });
+            this.w2 = Bodies.circle(startX - 25, startY + 20, 13, {
+                collisionFilter: { group: CAR_GROUP },
+                friction: 1.0, density: 0.02, restitution: 0.1,
+                render: { fillStyle: '#333', strokeStyle: '#555', lineWidth: 2 }
+            });
+
+            this.ax1 = Constraint.create({ bodyA: this.chassis, bodyB: this.w1, pointA: {x: 25, y: 15}, stiffness: 0.2, length: 0, render:{visible:false}});
+            this.ax2 = Constraint.create({ bodyA: this.chassis, bodyB: this.w2, pointA: {x: -25, y: 15}, stiffness: 0.2, length: 0, render:{visible:false}});
+
+            this.comp = Composite.create();
+            Composite.add(this.comp, [this.chassis, this.w1, this.w2, this.ax1, this.ax2]);
+            Composite.add(world, this.comp);
+        }
+
+        think() {
+            if(!this.alive) return;
+            const inputs = [
+                this.chassis.angle / Math.PI,
+                this.chassis.angularVelocity * 5,
+                this.w1.angularVelocity,
+                this.w2.angularVelocity,
+                (FINISH_LINE_X - this.chassis.position.x) / 5000
+            ];
+            const out = this.brain.predict(inputs);
+            
+            const torque = 0.3; // Increased slightly for steeper hills
+            if(out[0] > 0) Body.setAngularVelocity(this.w2, this.w2.angularVelocity + out[0] * torque);
+            if(out[1] > 0) Body.setAngularVelocity(this.w1, this.w1.angularVelocity + out[1] * torque);
+        }
+
+        update() {
+            if(!this.alive) return;
+            const x = this.chassis.position.x;
+            
+            if(x > this.maxDist + 5) { this.maxDist = x; this.fuel = 400; } else { this.fuel--; }
+
+            if(x >= FINISH_LINE_X) {
+                this.finished = true; 
+                this.alive = false; 
+                this.maxDist += 100000;
+                triggerWin(this.brain);
+            }
+
+            // Death Conditions
+            if(this.fuel <= 0 || Math.abs(this.chassis.angle) > 2.5 || x < 50) return this.die();
+        }
+
+        die() {
+            this.alive = false;
+            this.chassis.render.fillStyle = '#222';
+            Composite.remove(this.comp, [this.ax1, this.ax2]);
+        }
+        remove() { Composite.remove(world, this.comp); }
+    }
+
+    // ================= TERRAIN SYSTEM =================
+    
+    // Default configurations
+    const LEVELS = {
+        "1": { rough: 0.2, amp: 0.5, width: 90, color: '#2e9c56' }, // Easy
+        "2": { rough: 0.9, amp: 1.2, width: 70, color: '#8c7b50' }, // Hard (Bumpy)
+        "3": { rough: 0.4, amp: 1.8, width: 100, color: '#555' }    // Expert (Steep)
+    };
+
+    function generateTerrain(lvlKey, customConfig = null) {
+        Composite.clear(world, true);
+        const bodies = Composite.allBodies(world);
+        bodies.forEach(b => {
+            if(b.label !== 'car' && b.label !== 'chassis') Composite.remove(world, b);
+        });
+
+        // Config
+        let cfg = LEVELS[lvlKey] || LEVELS["1"];
+        if(customConfig) cfg = customConfig;
+
+        const groundParts = [];
+        groundParts.push(Bodies.rectangle(150, window.innerHeight - 150, 400, 40, { isStatic: true, friction: 1, render: { fillStyle: '#444' } }));
+
+        let currentX = 350; 
+        let currentY = window.innerHeight - 170;
+        let prevAngle = 0;
+
+        while(currentX < FINISH_LINE_X + 500) {
+            const segWidth = cfg.width + (Math.random() * 20 - 10);
+            let angle = 0;
+
+            if (lvlKey === "3" && !customConfig) {
+                // FIXED LEVEL 3: Techy Ramps (No vertical walls)
+                // We change angle drastically, but smooth the transition
+                const change = (Math.random() - 0.5) * 1.5; // Big changes
+                angle = prevAngle + change;
+                // Clamp max angle to ~60 degrees (1.0 rad) to prevent vertical walls
+                if (angle > 1.0) angle = 1.0;
+                if (angle < -0.4) angle = -0.4;
+            } else {
+                // Standard Logic (Levels 1, 2, Custom)
+                const difficulty = currentX / FINISH_LINE_X;
+                const noise = (Math.random() - 0.5) * cfg.rough; 
+                const sine = Math.sin(currentX * 0.01) * cfg.amp * 0.5;
+                
+                angle = (noise + sine) * (0.5 + difficulty);
+                
+                // Hard clamp to prevent impossible loops
+                if(angle > 0.85) angle = 0.85; 
+                if(angle < -0.85) angle = -0.85;
+            }
+
+            prevAngle = angle;
+
+            const cx = currentX + (segWidth/2) * Math.cos(angle);
+            const cy = currentY + (segWidth/2) * Math.sin(angle);
+
+            groundParts.push(Bodies.rectangle(cx, cy, segWidth, 20, {
+                isStatic: true, angle: angle, friction: 1, render: { fillStyle: cfg.color || '#333' }
+            }));
+
+            currentX += segWidth * Math.cos(angle);
+            currentY += segWidth * Math.sin(angle);
+        }
+
+        groundParts.push(Bodies.rectangle(FINISH_LINE_X, window.innerHeight/2, 10, window.innerHeight, { isStatic: true, isSensor: true, render: { fillStyle: '#00ff88', opacity: 0.3 } }));
+        Composite.add(world, groundParts);
+    }
+
+    // ================= MANAGER =================
+    let cars = [];
+    let generation = 1;
+    let bestBrain = null;
+    let winTriggered = false;
+
+    function startGen() {
+        cars.forEach(c => c.remove());
+        cars = [];
+        winTriggered = false;
+        
+        for(let i=0; i<POPULATION_SIZE; i++) {
+            if(i===0 && bestBrain) cars.push(new Car(bestBrain, true));
+            else cars.push(new Car(bestBrain, false));
+        }
+        document.getElementById('gen-val').innerText = generation;
+        document.getElementById('alive-val').innerText = POPULATION_SIZE;
+    }
+
+    function nextGen() {
+        if(winTriggered) return;
+        
+        let bestCar = cars.reduce((prev, curr) => (curr.maxDist > prev.maxDist) ? curr : prev);
+        if (bestCar.maxDist > globalRecordDist) {
+            globalRecordDist = bestCar.maxDist;
+            document.getElementById('record-val').innerText = Math.floor(globalRecordDist) + "m";
+        }
+        bestBrain = bestCar.brain;
+        generation++;
+        startGen();
+    }
+
+    // --- UI & CONTROL ---
+
+    function changeLevel(val) {
+        currentLevel = val;
+        const editor = document.getElementById('editor-panel');
+        
+        if (val === 'custom') {
+            editor.style.display = 'block';
+        } else {
+            editor.style.display = 'none';
+            resetAndStart();
+        }
+    }
+
+    function generateCustomMap() {
+        const r = parseFloat(document.getElementById('edit-rough').value);
+        const a = parseFloat(document.getElementById('edit-amp').value);
+        const w = parseFloat(document.getElementById('edit-width').value);
+        
+        const config = { rough: r, amp: a, width: w, color: '#00d2ff' };
+        
+        resetAndStart(config);
+    }
+
+    function resetAndStart(customCfg = null) {
+        generation = 1;
+        globalRecordDist = 0;
+        document.getElementById('record-val').innerText = "0m";
+        generateTerrain(currentLevel, customCfg);
+        startGen();
+    }
+
+    function triggerWin(winningBrain) {
+        if(winTriggered) return;
+        winTriggered = true;
+        
+        const msg = document.getElementById('finish-msg');
+        msg.style.display = 'block';
+        bestBrain = winningBrain;
+
+        setTimeout(() => {
+            msg.style.display = 'none';
+            // Auto progression logic
+            if (currentLevel === "1") {
+                document.getElementById('level-select').value = "2";
+                changeLevel("2");
+            } else if (currentLevel === "2") {
+                document.getElementById('level-select').value = "3";
+                changeLevel("3");
+            } else {
+                nextGen(); // Loop or stay on current
+            }
+        }, 2000);
+    }
+
+    function togglePause() {
+        isPaused = !isPaused;
+        document.getElementById('pause-overlay').style.display = isPaused ? 'flex' : 'none';
+    }
+
+    function updateSpeed(val) {
+        physicsSpeed = parseInt(val);
+        document.getElementById('speed-label').innerText = val + "x";
+    }
+
+    // ================= LOOP =================
+    function loop() {
+        if (!isPaused) {
+            for(let s=0; s<physicsSpeed; s++) {
+                Engine.update(engine, 1000/60);
+                
+                let aliveCount = 0;
+                let currentGenMax = 0;
+                let leader = null;
+
+                for(let c of cars) {
+                    c.think();
+                    c.update();
+                    if(c.alive && !c.finished) {
+                        aliveCount++;
+                        if(c.chassis.position.x > currentGenMax) {
+                            currentGenMax = c.chassis.position.x;
+                            leader = c;
+                        }
+                    }
+                }
+                
+                if(s === physicsSpeed-1) {
+                    document.getElementById('alive-val').innerText = aliveCount;
+                    document.getElementById('current-lead-val').innerText = Math.floor(currentGenMax) + "m";
+
+                    if(leader) {
+                        const camX = -leader.chassis.position.x + window.innerWidth/2 - 200;
+                        render.bounds.min.x = leader.chassis.position.x - 300;
+                        render.bounds.max.x = leader.chassis.position.x + window.innerWidth;
+                        render.bounds.min.y = leader.chassis.position.y - window.innerHeight/2;
+                        render.bounds.max.y = leader.chassis.position.y + window.innerHeight/2;
+                    }
+                }
+                
+                if(aliveCount === 0 && !winTriggered) { nextGen(); break; }
+            }
+        }
+        requestAnimationFrame(loop);
+    }
+
+    // Init
+    generateTerrain("1");
+    startGen();
+    Render.run(render);
+    loop();
+</script>
+</body>
+</html>
