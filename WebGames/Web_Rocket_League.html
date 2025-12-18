@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turbo Soccer 3D</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #0a0a0f;
+            font-family: 'Rajdhani', sans-serif;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        /* HUD Overlay */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        /* Score Display */
+        #score-panel {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 30px;
+            background: linear-gradient(180deg, rgba(0,0,0,0.8) 0%, rgba(20,20,40,0.6) 100%);
+            padding: 15px 40px;
+            border-radius: 50px;
+            border: 2px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+        
+        .team-score {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 80px;
+        }
+        
+        .team-label {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.7;
+        }
+        
+        .team-score.player .team-label { color: #00ffff; }
+        .team-score.enemy .team-label { color: #ff4466; }
+        
+        .score-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 48px;
+            font-weight: 900;
+            line-height: 1;
+        }
+        
+        .team-score.player .score-value { 
+            color: #00ffff;
+            text-shadow: 0 0 20px rgba(0,255,255,0.5);
+        }
+        .team-score.enemy .score-value { 
+            color: #ff4466;
+            text-shadow: 0 0 20px rgba(255,68,102,0.5);
+        }
+        
+        #timer {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+            background: rgba(255,255,255,0.1);
+            padding: 10px 25px;
+            border-radius: 25px;
+            min-width: 100px;
+            text-align: center;
+        }
+        
+        #timer.warning {
+            color: #ff4466;
+            animation: pulse 0.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Boost Meter */
+        #boost-container {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        #boost-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            color: #ff9900;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-shadow: 0 0 10px rgba(255,153,0,0.5);
+        }
+        
+        #boost-meter {
+            width: 200px;
+            height: 20px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 10px;
+            border: 2px solid rgba(255,153,0,0.3);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        #boost-fill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #ff6600, #ff9900, #ffcc00);
+            border-radius: 8px;
+            transition: width 0.1s ease;
+            box-shadow: 0 0 20px rgba(255,153,0,0.5);
+        }
+        
+        /* Jump Indicator */
+        #jump-container {
+            position: absolute;
+            bottom: 70px;
+            right: 30px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .jump-pip {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(0,255,136,0.3);
+            border: 2px solid rgba(0,255,136,0.5);
+            transition: all 0.2s ease;
+        }
+        
+        .jump-pip.available {
+            background: #00ff88;
+            box-shadow: 0 0 15px rgba(0,255,136,0.8);
+        }
+        
+        #jump-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            color: #00ff88;
+            letter-spacing: 2px;
+        }
+        
+        /* Speed Indicator */
+        #speed-display {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(0,0,0,0.6);
+            padding: 15px 25px;
+            border-radius: 15px;
+            border: 2px solid rgba(0,255,255,0.2);
+        }
+        
+        #speed-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 36px;
+            font-weight: 900;
+            color: #00ffff;
+            text-shadow: 0 0 15px rgba(0,255,255,0.5);
+        }
+        
+        #speed-unit {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 14px;
+            color: rgba(255,255,255,0.5);
+            margin-left: 5px;
+        }
+        
+        /* Pause hint */
+        #pause-hint {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 14px;
+            color: rgba(255,255,255,0.4);
+            letter-spacing: 2px;
+        }
+        
+        /* Goal Notification */
+        #goal-notification {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 80px;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 0 50px rgba(255,255,255,0.8), 0 0 100px rgba(255,200,0,0.5);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        
+        #goal-notification.show {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+        
+        #goal-notification.player-goal {
+            color: #00ffff;
+            text-shadow: 0 0 50px rgba(0,255,255,0.8), 0 0 100px rgba(0,255,255,0.5);
+        }
+        
+        #goal-notification.enemy-goal {
+            color: #ff4466;
+            text-shadow: 0 0 50px rgba(255,68,102,0.8), 0 0 100px rgba(255,68,102,0.5);
+        }
+        
+        /* Pause Menu */
+        #pause-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 150;
+            pointer-events: auto;
+        }
+        
+        #pause-menu.show {
+            display: flex;
+        }
+        
+        #pause-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 56px;
+            font-weight: 900;
+            color: #fff;
+            margin-bottom: 50px;
+            text-shadow: 0 0 30px rgba(255,255,255,0.5);
+        }
+        
+        .menu-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            padding: 18px 50px;
+            margin: 10px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            transition: all 0.3s ease;
+            min-width: 250px;
+        }
+        
+        #resume-btn {
+            background: linear-gradient(135deg, #00ffff, #00aaff);
+            color: #000;
+            box-shadow: 0 10px 40px rgba(0,255,255,0.3);
+        }
+        
+        #resume-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 50px rgba(0,255,255,0.5);
+        }
+        
+        #settings-btn, #settings-btn-pause {
+            background: linear-gradient(135deg, #aa55ff, #7722ff);
+            color: #fff;
+            box-shadow: 0 10px 40px rgba(170,85,255,0.3);
+        }
+        
+        #settings-btn:hover, #settings-btn-pause:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 50px rgba(170,85,255,0.5);
+        }
+        
+        #restart-btn-pause {
+            background: linear-gradient(135deg, #ff9900, #ff6600);
+            color: #000;
+            box-shadow: 0 10px 40px rgba(255,153,0,0.3);
+        }
+        
+        #restart-btn-pause:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 50px rgba(255,153,0,0.5);
+        }
+        
+        #quit-btn {
+            background: linear-gradient(135deg, #ff4466, #ff0044);
+            color: #fff;
+            box-shadow: 0 10px 40px rgba(255,68,102,0.3);
+        }
+        
+        #quit-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 50px rgba(255,68,102,0.5);
+        }
+        
+        /* Settings Menu */
+        #settings-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 250;
+            pointer-events: auto;
+        }
+        
+        #settings-menu.show {
+            display: flex;
+        }
+        
+        #settings-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 48px;
+            font-weight: 900;
+            color: #aa55ff;
+            margin-bottom: 40px;
+            text-shadow: 0 0 30px rgba(170,85,255,0.5);
+        }
+        
+        .settings-panel {
+            background: rgba(255,255,255,0.05);
+            padding: 30px 50px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 30px;
+            min-width: 500px;
+        }
+        
+        .settings-section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 18px;
+            color: #00ffff;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            color: rgba(255,255,255,0.8);
+            font-size: 16px;
+        }
+        
+        .setting-row label {
+            flex: 1;
+        }
+        
+        .setting-row input[type="range"] {
+            width: 200px;
+            height: 8px;
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            outline: none;
+        }
+        
+        .setting-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #00ffff, #00aaff);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,255,255,0.5);
+        }
+        
+        .setting-value {
+            min-width: 50px;
+            text-align: right;
+            font-family: 'Orbitron', sans-serif;
+            color: #00ffff;
+        }
+        
+        /* AI Difficulty Buttons */
+        .difficulty-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .diff-btn {
+            padding: 10px 25px;
+            border: 2px solid rgba(255,255,255,0.2);
+            background: transparent;
+            color: rgba(255,255,255,0.6);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .diff-btn:hover {
+            border-color: rgba(255,255,255,0.5);
+            color: #fff;
+        }
+        
+        .diff-btn.active {
+            border-color: #00ff88;
+            background: rgba(0,255,136,0.2);
+            color: #00ff88;
+            box-shadow: 0 0 20px rgba(0,255,136,0.3);
+        }
+        
+        .diff-btn.easy.active {
+            border-color: #00ff88;
+            background: rgba(0,255,136,0.2);
+            color: #00ff88;
+        }
+        
+        .diff-btn.medium.active {
+            border-color: #ffaa00;
+            background: rgba(255,170,0,0.2);
+            color: #ffaa00;
+        }
+        
+        .diff-btn.hard.active {
+            border-color: #ff4466;
+            background: rgba(255,68,102,0.2);
+            color: #ff4466;
+        }
+        
+        .diff-btn.insane.active {
+            border-color: #aa55ff;
+            background: rgba(170,85,255,0.2);
+            color: #aa55ff;
+        }
+        
+        #back-settings-btn {
+            background: linear-gradient(135deg, #555, #333);
+            color: #fff;
+            margin-top: 20px;
+        }
+        
+        #back-settings-btn:hover {
+            transform: scale(1.1);
+        }
+        
+        /* Game Over Screen */
+        #game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            pointer-events: auto;
+        }
+        
+        #game-over.show {
+            display: flex;
+        }
+        
+        #result-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 72px;
+            font-weight: 900;
+            margin-bottom: 20px;
+        }
+        
+        #result-text.win {
+            color: #00ff88;
+            text-shadow: 0 0 50px rgba(0,255,136,0.5);
+        }
+        
+        #result-text.lose {
+            color: #ff4466;
+            text-shadow: 0 0 50px rgba(255,68,102,0.5);
+        }
+        
+        #result-text.draw {
+            color: #ffcc00;
+            text-shadow: 0 0 50px rgba(255,204,0,0.5);
+        }
+        
+        #final-score {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 48px;
+            color: #fff;
+            margin-bottom: 40px;
+        }
+        
+        #restart-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            padding: 20px 60px;
+            background: linear-gradient(135deg, #00ffff, #00aaff);
+            color: #000;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0,255,255,0.3);
+        }
+        
+        #restart-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 50px rgba(0,255,255,0.5);
+        }
+        
+        /* Start Screen */
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a1a 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 300;
+            pointer-events: auto;
+        }
+        
+        #start-screen.hidden {
+            display: none;
+        }
+        
+        #game-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 72px;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 0 50px rgba(0,255,255,0.5), 0 0 100px rgba(255,0,255,0.3);
+            margin-bottom: 10px;
+            letter-spacing: 5px;
+        }
+        
+        #game-subtitle {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 24px;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 40px;
+            letter-spacing: 10px;
+            text-transform: uppercase;
+        }
+        
+        .start-buttons {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        #start-btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            padding: 25px 80px;
+            background: linear-gradient(135deg, #ff0066, #ff6600);
+            color: #fff;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 50px rgba(255,0,102,0.4);
+        }
+        
+        #start-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 15px 60px rgba(255,0,102,0.6);
+        }
+        
+        #controls-info {
+            background: rgba(255,255,255,0.05);
+            padding: 30px 50px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        #controls-info h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 18px;
+            color: #00ffff;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 16px;
+            color: rgba(255,255,255,0.7);
+        }
+        
+        .control-key {
+            background: rgba(255,255,255,0.1);
+            padding: 5px 15px;
+            border-radius: 5px;
+            font-family: 'Orbitron', sans-serif;
+            color: #fff;
+            margin-left: 30px;
+        }
+        
+        /* Minimap */
+        #minimap {
+            position: absolute;
+            top: 100px;
+            right: 20px;
+            width: 180px;
+            height: 120px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 10px;
+            border: 2px solid rgba(255,255,255,0.2);
+            overflow: hidden;
+        }
+        
+        #minimap-canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Difficulty display */
+        #difficulty-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 12px;
+            color: rgba(255,255,255,0.5);
+            letter-spacing: 2px;
+        }
+        
+        #difficulty-display span {
+            color: #ffaa00;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- Start Screen -->
+        <div id="start-screen">
+            <h1 id="game-title">TURBO SOCCER</h1>
+            <p id="game-subtitle">3D Car Football</p>
+            <div class="start-buttons">
+                <button id="start-btn">START</button>
+                <button class="menu-btn" id="settings-btn">Settings</button>
+            </div>
+            <div id="controls-info">
+                <h3>Controls</h3>
+                <div class="control-row">
+                    <span>Accelerate</span>
+                    <span class="control-key">W / ↑</span>
+                </div>
+                <div class="control-row">
+                    <span>Reverse</span>
+                    <span class="control-key">S / ↓</span>
+                </div>
+                <div class="control-row">
+                    <span>Steer Left</span>
+                    <span class="control-key">A / ←</span>
+                </div>
+                <div class="control-row">
+                    <span>Steer Right</span>
+                    <span class="control-key">D / →</span>
+                </div>
+                <div class="control-row">
+                    <span>Jump / Double Jump</span>
+                    <span class="control-key">SPACE</span>
+                </div>
+                <div class="control-row">
+                    <span>Boost</span>
+                    <span class="control-key">SHIFT</span>
+                </div>
+                <div class="control-row">
+                    <span>Pause</span>
+                    <span class="control-key">ESC / P</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Settings Menu -->
+        <div id="settings-menu">
+            <h2 id="settings-title">SETTINGS</h2>
+            
+            <div class="settings-panel">
+                <h3 class="settings-section-title">AI Difficulty</h3>
+                <div class="setting-row">
+                    <label>Select Difficulty:</label>
+                    <div class="difficulty-buttons">
+                        <button class="diff-btn easy" data-diff="easy">Easy</button>
+                        <button class="diff-btn medium active" data-diff="medium">Medium</button>
+                        <button class="diff-btn hard" data-diff="hard">Hard</button>
+                        <button class="diff-btn insane" data-diff="insane">Insane</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="settings-panel">
+                <h3 class="settings-section-title">Movement Sensitivity</h3>
+                <div class="setting-row">
+                    <label>Steering Sensitivity</label>
+                    <input type="range" id="steer-sens" min="50" max="150" value="100">
+                    <span class="setting-value" id="steer-sens-val">100%</span>
+                </div>
+                <div class="setting-row">
+                    <label>Acceleration</label>
+                    <input type="range" id="accel-sens" min="50" max="150" value="100">
+                    <span class="setting-value" id="accel-sens-val">100%</span>
+                </div>
+                <div class="setting-row">
+                    <label>Jump Power</label>
+                    <input type="range" id="jump-sens" min="50" max="150" value="100">
+                    <span class="setting-value" id="jump-sens-val">100%</span>
+                </div>
+            </div>
+            
+            <div class="settings-panel">
+                <h3 class="settings-section-title">Camera</h3>
+                <div class="setting-row">
+                    <label>Camera Distance</label>
+                    <input type="range" id="cam-dist" min="50" max="150" value="100">
+                    <span class="setting-value" id="cam-dist-val">100%</span>
+                </div>
+                <div class="setting-row">
+                    <label>Camera Height</label>
+                    <input type="range" id="cam-height" min="50" max="150" value="100">
+                    <span class="setting-value" id="cam-height-val">100%</span>
+                </div>
+            </div>
+            
+            <button class="menu-btn" id="back-settings-btn">Back</button>
+        </div>
+        
+        <!-- HUD -->
+        <div id="hud">
+            <div id="score-panel">
+                <div class="team-score player">
+                    <span class="team-label">You</span>
+                    <span class="score-value" id="player-score">0</span>
+                </div>
+                <div id="timer">3:00</div>
+                <div class="team-score enemy">
+                    <span class="team-label">CPU</span>
+                    <span class="score-value" id="enemy-score">0</span>
+                </div>
+            </div>
+            
+            <div id="difficulty-display">AI: <span id="diff-text">MEDIUM</span></div>
+            
+            <div id="pause-hint">Press ESC or P to pause</div>
+            
+            <div id="boost-container">
+                <span id="boost-label">Boost</span>
+                <div id="boost-meter">
+                    <div id="boost-fill"></div>
+                </div>
+            </div>
+            
+            <div id="jump-container">
+                <span id="jump-label">JUMP</span>
+                <div class="jump-pip available" id="jump1"></div>
+                <div class="jump-pip available" id="jump2"></div>
+            </div>
+            
+            <div id="speed-display">
+                <span id="speed-value">0</span>
+                <span id="speed-unit">KM/H</span>
+            </div>
+            
+            <div id="minimap">
+                <canvas id="minimap-canvas"></canvas>
+            </div>
+            
+            <div id="goal-notification">GOAL!</div>
+        </div>
+        
+        <!-- Pause Menu -->
+        <div id="pause-menu">
+            <h2 id="pause-title">PAUSED</h2>
+            <button class="menu-btn" id="resume-btn">Resume</button>
+            <button class="menu-btn" id="settings-btn-pause">Settings</button>
+            <button class="menu-btn" id="restart-btn-pause">Restart</button>
+            <button class="menu-btn" id="quit-btn">Quit to Menu</button>
+        </div>
+        
+        <!-- Game Over Screen -->
+        <div id="game-over">
+            <div id="result-text">VICTORY!</div>
+            <div id="final-score">5 - 3</div>
+            <button id="restart-btn">Play Again</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ===== SETTINGS =====
+        let settings = {
+            difficulty: 'medium',
+            steerSensitivity: 1.0,
+            accelSensitivity: 1.0,
+            jumpSensitivity: 1.0,
+            cameraDistance: 1.0,
+            cameraHeight: 1.0
+        };
+        
+        // AI Difficulty presets
+        const AI_PRESETS = {
+            easy: {
+                accuracy: 0.65,
+                reactionTime: 0.3,
+                boostChance: 0.2,
+                predictionTime: 0.3,
+                speedMultiplier: 0.7,
+                jumpChance: 0.1
+            },
+            medium: {
+                accuracy: 0.82,
+                reactionTime: 0.15,
+                boostChance: 0.4,
+                predictionTime: 0.6,
+                speedMultiplier: 0.85,
+                jumpChance: 0.25
+            },
+            hard: {
+                accuracy: 0.92,
+                reactionTime: 0.05,
+                boostChance: 0.6,
+                predictionTime: 1.0,
+                speedMultiplier: 0.95,
+                jumpChance: 0.4
+            },
+            insane: {
+                accuracy: 0.98,
+                reactionTime: 0.02,
+                boostChance: 0.8,
+                predictionTime: 1.5,
+                speedMultiplier: 1.0,
+                jumpChance: 0.6
+            }
+        };
+
+        // ===== GAME CONFIGURATION =====
+        const CONFIG = {
+            matchDuration: 180,
+            arenaWidth: 120,
+            arenaLength: 80,
+            arenaHeight: 30,
+            goalWidth: 20,
+            goalHeight: 10,
+            goalDepth: 5,
+            ballRadius: 2.5,
+            ballMass: 1,
+            ballFriction: 0.985,
+            ballBounce: 0.75,
+            carLength: 4,
+            carWidth: 2,
+            carHeight: 1.5,
+            carAcceleration: 0.35,
+            carMaxSpeed: 1.8,
+            carTurnSpeed: 0.08,
+            carFriction: 0.92,
+            boostMultiplier: 1.6,
+            boostDrain: 0.8,
+            boostRecharge: 0.25,
+            maxBoost: 100,
+            // Jump settings
+            jumpForce: 0.45,
+            doubleJumpForce: 0.4,
+            gravity: 0.025,
+            maxJumps: 2
+        };
+
+        // ===== GAME STATE =====
+        let gameState = {
+            running: false,
+            paused: false,
+            timeRemaining: CONFIG.matchDuration,
+            playerScore: 0,
+            enemyScore: 0,
+            boost: CONFIG.maxBoost,
+            aiBoost: CONFIG.maxBoost,
+            goalScored: false,
+            resetTimer: 0,
+            jumpsRemaining: 2,
+            aiJumpsRemaining: 2
+        };
+
+        // ===== THREE.JS SETUP =====
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('game-container').appendChild(renderer.domElement);
+
+        scene.fog = new THREE.Fog(0x0a0a1a, 50, 200);
+        scene.background = new THREE.Color(0x0a0a1a);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404080, 0.5);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1);
+        mainLight.position.set(50, 80, 30);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        mainLight.shadow.camera.near = 10;
+        mainLight.shadow.camera.far = 200;
+        mainLight.shadow.camera.left = -100;
+        mainLight.shadow.camera.right = 100;
+        mainLight.shadow.camera.top = 100;
+        mainLight.shadow.camera.bottom = -100;
+        scene.add(mainLight);
+
+        const cyanLight = new THREE.PointLight(0x00ffff, 1, 100);
+        cyanLight.position.set(-CONFIG.arenaWidth/2, 20, 0);
+        scene.add(cyanLight);
+
+        const magentaLight = new THREE.PointLight(0xff00ff, 1, 100);
+        magentaLight.position.set(CONFIG.arenaWidth/2, 20, 0);
+        scene.add(magentaLight);
+
+        // ===== ARENA CREATION =====
+        function createArena() {
+            const arenaGroup = new THREE.Group();
+            
+            const floorGeometry = new THREE.PlaneGeometry(CONFIG.arenaWidth, CONFIG.arenaLength);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            arenaGroup.add(floor);
+            
+            const gridHelper = new THREE.GridHelper(Math.max(CONFIG.arenaWidth, CONFIG.arenaLength), 20, 0x00ffff, 0x1a1a3e);
+            gridHelper.position.y = 0.05;
+            arenaGroup.add(gridHelper);
+            
+            const centerCircleGeometry = new THREE.RingGeometry(8, 8.5, 64);
+            const centerCircleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide });
+            const centerCircle = new THREE.Mesh(centerCircleGeometry, centerCircleMaterial);
+            centerCircle.rotation.x = -Math.PI / 2;
+            centerCircle.position.y = 0.06;
+            arenaGroup.add(centerCircle);
+            
+            const centerLineGeometry = new THREE.PlaneGeometry(0.5, CONFIG.arenaLength);
+            const centerLineMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            const centerLine = new THREE.Mesh(centerLineGeometry, centerLineMaterial);
+            centerLine.rotation.x = -Math.PI / 2;
+            centerLine.position.y = 0.06;
+            arenaGroup.add(centerLine);
+            
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4e,
+                roughness: 0.5,
+                metalness: 0.3,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const sideWallGeometry = new THREE.BoxGeometry(2, CONFIG.arenaHeight, CONFIG.arenaLength);
+            
+            const leftWall = new THREE.Mesh(sideWallGeometry, wallMaterial);
+            leftWall.position.set(-CONFIG.arenaWidth/2 - 1, CONFIG.arenaHeight/2, 0);
+            arenaGroup.add(leftWall);
+            
+            const rightWall = new THREE.Mesh(sideWallGeometry, wallMaterial);
+            rightWall.position.set(CONFIG.arenaWidth/2 + 1, CONFIG.arenaHeight/2, 0);
+            arenaGroup.add(rightWall);
+            
+            const backWallSideWidth = (CONFIG.arenaWidth - CONFIG.goalWidth) / 2;
+            const backWallGeometry = new THREE.BoxGeometry(backWallSideWidth, CONFIG.arenaHeight, 2);
+            const goalTopGeometry = new THREE.BoxGeometry(CONFIG.goalWidth, CONFIG.arenaHeight - CONFIG.goalHeight, 2);
+            
+            const backWallLeft1 = new THREE.Mesh(backWallGeometry, wallMaterial);
+            backWallLeft1.position.set(-CONFIG.arenaWidth/2 + backWallSideWidth/2, CONFIG.arenaHeight/2, -CONFIG.arenaLength/2 - 1);
+            arenaGroup.add(backWallLeft1);
+            
+            const backWallRight1 = new THREE.Mesh(backWallGeometry, wallMaterial);
+            backWallRight1.position.set(CONFIG.arenaWidth/2 - backWallSideWidth/2, CONFIG.arenaHeight/2, -CONFIG.arenaLength/2 - 1);
+            arenaGroup.add(backWallRight1);
+            
+            const goalTop1 = new THREE.Mesh(goalTopGeometry, wallMaterial);
+            goalTop1.position.set(0, CONFIG.goalHeight + (CONFIG.arenaHeight - CONFIG.goalHeight)/2, -CONFIG.arenaLength/2 - 1);
+            arenaGroup.add(goalTop1);
+            
+            const backWallLeft2 = new THREE.Mesh(backWallGeometry, wallMaterial);
+            backWallLeft2.position.set(-CONFIG.arenaWidth/2 + backWallSideWidth/2, CONFIG.arenaHeight/2, CONFIG.arenaLength/2 + 1);
+            arenaGroup.add(backWallLeft2);
+            
+            const backWallRight2 = new THREE.Mesh(backWallGeometry, wallMaterial);
+            backWallRight2.position.set(CONFIG.arenaWidth/2 - backWallSideWidth/2, CONFIG.arenaHeight/2, CONFIG.arenaLength/2 + 1);
+            arenaGroup.add(backWallRight2);
+            
+            const goalTop2 = new THREE.Mesh(goalTopGeometry, wallMaterial);
+            goalTop2.position.set(0, CONFIG.goalHeight + (CONFIG.arenaHeight - CONFIG.goalHeight)/2, CONFIG.arenaLength/2 + 1);
+            arenaGroup.add(goalTop2);
+            
+            createGoal(arenaGroup, -CONFIG.arenaLength/2 - CONFIG.goalDepth/2, 0x00ffff);
+            createGoal(arenaGroup, CONFIG.arenaLength/2 + CONFIG.goalDepth/2, 0xff4466);
+            
+            const neonGeometry = new THREE.BoxGeometry(CONFIG.arenaWidth + 4, 0.3, 0.3);
+            const neonMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            
+            const neonStrip1 = new THREE.Mesh(neonGeometry, neonMaterial);
+            neonStrip1.position.set(0, 0.15, -CONFIG.arenaLength/2);
+            arenaGroup.add(neonStrip1);
+            
+            const neonStrip2 = new THREE.Mesh(neonGeometry, neonMaterial.clone());
+            neonStrip2.material.color.setHex(0xff4466);
+            neonStrip2.position.set(0, 0.15, CONFIG.arenaLength/2);
+            arenaGroup.add(neonStrip2);
+            
+            scene.add(arenaGroup);
+            return arenaGroup;
+        }
+
+        function createGoal(parent, zPos, color) {
+            const goalGroup = new THREE.Group();
+            
+            const postMaterial = new THREE.MeshStandardMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.5,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            
+            const postGeometry = new THREE.CylinderGeometry(0.3, 0.3, CONFIG.goalHeight, 16);
+            const crossbarGeometry = new THREE.CylinderGeometry(0.3, 0.3, CONFIG.goalWidth, 16);
+            
+            const leftPost = new THREE.Mesh(postGeometry, postMaterial);
+            leftPost.position.set(-CONFIG.goalWidth/2, CONFIG.goalHeight/2, 0);
+            goalGroup.add(leftPost);
+            
+            const rightPost = new THREE.Mesh(postGeometry, postMaterial);
+            rightPost.position.set(CONFIG.goalWidth/2, CONFIG.goalHeight/2, 0);
+            goalGroup.add(rightPost);
+            
+            const crossbar = new THREE.Mesh(crossbarGeometry, postMaterial);
+            crossbar.rotation.z = Math.PI / 2;
+            crossbar.position.set(0, CONFIG.goalHeight, 0);
+            goalGroup.add(crossbar);
+            
+            const netMaterial = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.2,
+                wireframe: true
+            });
+            
+            const backNetGeometry = new THREE.PlaneGeometry(CONFIG.goalWidth, CONFIG.goalHeight, 10, 5);
+            const backNet = new THREE.Mesh(backNetGeometry, netMaterial);
+            backNet.position.set(0, CONFIG.goalHeight/2, zPos > 0 ? CONFIG.goalDepth : -CONFIG.goalDepth);
+            goalGroup.add(backNet);
+            
+            goalGroup.position.z = zPos;
+            parent.add(goalGroup);
+        }
+
+        // ===== CAR CREATION =====
+        function createCar(color, isPlayer = false) {
+            const carGroup = new THREE.Group();
+            
+            const bodyGeometry = new THREE.BoxGeometry(CONFIG.carWidth, CONFIG.carHeight * 0.6, CONFIG.carLength);
+            const bodyMaterial = new THREE.MeshStandardMaterial({
+                color: color,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = CONFIG.carHeight * 0.3;
+            body.castShadow = true;
+            carGroup.add(body);
+            
+            const roofGeometry = new THREE.BoxGeometry(CONFIG.carWidth * 0.8, CONFIG.carHeight * 0.4, CONFIG.carLength * 0.5);
+            const roof = new THREE.Mesh(roofGeometry, bodyMaterial);
+            roof.position.set(0, CONFIG.carHeight * 0.7, -CONFIG.carLength * 0.1);
+            roof.castShadow = true;
+            carGroup.add(roof);
+            
+            const wheelGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.3, 16);
+            const wheelMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a1a,
+                metalness: 0.3,
+                roughness: 0.8
+            });
+            
+            const wheelPositions = [
+                [-CONFIG.carWidth/2 - 0.1, 0.4, CONFIG.carLength/3],
+                [CONFIG.carWidth/2 + 0.1, 0.4, CONFIG.carLength/3],
+                [-CONFIG.carWidth/2 - 0.1, 0.4, -CONFIG.carLength/3],
+                [CONFIG.carWidth/2 + 0.1, 0.4, -CONFIG.carLength/3]
+            ];
+            
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(pos[0], pos[1], pos[2]);
+                wheel.castShadow = true;
+                carGroup.add(wheel);
+            });
+            
+            const headlightGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+            const headlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffaa });
+            
+            const headlight1 = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlight1.position.set(-CONFIG.carWidth/3, CONFIG.carHeight * 0.3, CONFIG.carLength/2);
+            carGroup.add(headlight1);
+            
+            const headlight2 = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            headlight2.position.set(CONFIG.carWidth/3, CONFIG.carHeight * 0.3, CONFIG.carLength/2);
+            carGroup.add(headlight2);
+            
+            const taillightMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const taillight1 = new THREE.Mesh(headlightGeometry, taillightMaterial);
+            taillight1.position.set(-CONFIG.carWidth/3, CONFIG.carHeight * 0.3, -CONFIG.carLength/2);
+            carGroup.add(taillight1);
+            
+            const taillight2 = new THREE.Mesh(headlightGeometry, taillightMaterial);
+            taillight2.position.set(CONFIG.carWidth/3, CONFIG.carHeight * 0.3, -CONFIG.carLength/2);
+            carGroup.add(taillight2);
+            
+            // Boost flame
+            const flameGeometry = new THREE.ConeGeometry(0.3, 1.5, 8);
+            const flameMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff6600,
+                transparent: true,
+                opacity: 0.8
+            });
+            const flame = new THREE.Mesh(flameGeometry, flameMaterial);
+            flame.rotation.x = Math.PI / 2;
+            flame.position.set(0, CONFIG.carHeight * 0.3, -CONFIG.carLength/2 - 0.8);
+            flame.visible = false;
+            flame.name = 'boostFlame';
+            carGroup.add(flame);
+            
+            // Jump trail
+            const trailGeometry = new THREE.CylinderGeometry(0.5, 0.8, 0.5, 8);
+            const trailMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ff88,
+                transparent: true,
+                opacity: 0.6
+            });
+            const jumpTrail = new THREE.Mesh(trailGeometry, trailMaterial);
+            jumpTrail.position.set(0, -0.3, 0);
+            jumpTrail.visible = false;
+            jumpTrail.name = 'jumpTrail';
+            carGroup.add(jumpTrail);
+            
+            carGroup.userData = {
+                velocity: new THREE.Vector3(),
+                verticalVelocity: 0,
+                angularVelocity: 0,
+                speed: 0,
+                isPlayer: isPlayer,
+                boosting: false,
+                grounded: true,
+                jumpsRemaining: CONFIG.maxJumps
+            };
+            
+            carGroup.castShadow = true;
+            scene.add(carGroup);
+            return carGroup;
+        }
+
+        // ===== BALL CREATION =====
+        function createBall() {
+            const ballGeometry = new THREE.SphereGeometry(CONFIG.ballRadius, 32, 32);
+            const ballMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                metalness: 0.1,
+                roughness: 0.3,
+                emissive: 0xffffaa,
+                emissiveIntensity: 0.1
+            });
+            
+            const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+            ball.position.set(0, CONFIG.ballRadius, 0);
+            ball.castShadow = true;
+            
+            const patternGeometry = new THREE.IcosahedronGeometry(CONFIG.ballRadius * 1.01, 1);
+            const patternMaterial = new THREE.MeshBasicMaterial({
+                color: 0x000000,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.3
+            });
+            const pattern = new THREE.Mesh(patternGeometry, patternMaterial);
+            ball.add(pattern);
+            
+            ball.userData = {
+                velocity: new THREE.Vector3(),
+                angularVelocity: new THREE.Vector3()
+            };
+            
+            scene.add(ball);
+            return ball;
+        }
+
+        // ===== CREATE GAME OBJECTS =====
+        const arena = createArena();
+        const playerCar = createCar(0x00ffff, true);
+        const enemyCar = createCar(0xff4466, false);
+        const ball = createBall();
+
+        function resetPositions() {
+            playerCar.position.set(0, 0, -CONFIG.arenaLength/4);
+            playerCar.rotation.set(0, 0, 0);
+            playerCar.userData.velocity.set(0, 0, 0);
+            playerCar.userData.verticalVelocity = 0;
+            playerCar.userData.speed = 0;
+            playerCar.userData.grounded = true;
+            playerCar.userData.jumpsRemaining = CONFIG.maxJumps;
+            
+            enemyCar.position.set(0, 0, CONFIG.arenaLength/4);
+            enemyCar.rotation.set(0, Math.PI, 0);
+            enemyCar.userData.velocity.set(0, 0, 0);
+            enemyCar.userData.verticalVelocity = 0;
+            enemyCar.userData.speed = 0;
+            enemyCar.userData.grounded = true;
+            enemyCar.userData.jumpsRemaining = CONFIG.maxJumps;
+            
+            ball.position.set(0, CONFIG.ballRadius, 0);
+            ball.userData.velocity.set(0, 0, 0);
+            
+            gameState.jumpsRemaining = CONFIG.maxJumps;
+            gameState.aiJumpsRemaining = CONFIG.maxJumps;
+        }
+
+        resetPositions();
+
+        // ===== INPUT HANDLING =====
+        const keys = {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            boost: false,
+            jump: false
+        };
+        
+        let jumpPressed = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Escape' || e.code === 'KeyP') {
+                togglePause();
+                return;
+            }
+            
+            switch(e.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    keys.forward = true;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    keys.backward = true;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    keys.left = true;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    keys.right = true;
+                    break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    keys.boost = true;
+                    break;
+                case 'Space':
+                    if (!jumpPressed) {
+                        keys.jump = true;
+                        jumpPressed = true;
+                    }
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'KeyW':
+                case 'ArrowUp':
+                    keys.forward = false;
+                    break;
+                case 'KeyS':
+                case 'ArrowDown':
+                    keys.backward = false;
+                    break;
+                case 'KeyA':
+                case 'ArrowLeft':
+                    keys.left = false;
+                    break;
+                case 'KeyD':
+                case 'ArrowRight':
+                    keys.right = false;
+                    break;
+                case 'ShiftLeft':
+                case 'ShiftRight':
+                    keys.boost = false;
+                    break;
+                case 'Space':
+                    keys.jump = false;
+                    jumpPressed = false;
+                    break;
+            }
+        });
+
+        // ===== CAR PHYSICS WITH JUMP =====
+        function updateCar(car, inputs, deltaTime, isPlayer = true) {
+            const userData = car.userData;
+            const sens = settings;
+            
+            let acceleration = 0;
+            let turning = 0;
+            let boosting = false;
+            
+            const accelMult = isPlayer ? sens.accelSensitivity : 1;
+            const steerMult = isPlayer ? sens.steerSensitivity : 1;
+            const jumpMult = isPlayer ? sens.jumpSensitivity : 1;
+            
+            if (inputs.forward) acceleration = CONFIG.carAcceleration * accelMult;
+            if (inputs.backward) acceleration = -CONFIG.carAcceleration * 0.7 * accelMult;
+            
+            if (inputs.left) turning = CONFIG.carTurnSpeed * steerMult;
+            if (inputs.right) turning = -CONFIG.carTurnSpeed * steerMult;
+            
+            // Boost
+            if (isPlayer) {
+                if (inputs.boost && gameState.boost > 0 && (inputs.forward || Math.abs(userData.speed) > 0.1)) {
+                    acceleration = Math.abs(acceleration) > 0 ? acceleration * CONFIG.boostMultiplier : CONFIG.carAcceleration * CONFIG.boostMultiplier * accelMult;
+                    gameState.boost -= CONFIG.boostDrain;
+                    boosting = true;
+                } else if (!inputs.boost) {
+                    gameState.boost = Math.min(CONFIG.maxBoost, gameState.boost + CONFIG.boostRecharge);
+                }
+            }
+            
+            userData.boosting = boosting;
+            
+            // Jump handling
+            if (inputs.jump && userData.jumpsRemaining > 0) {
+                const jumpForce = userData.jumpsRemaining === CONFIG.maxJumps ? 
+                    CONFIG.jumpForce * jumpMult : CONFIG.doubleJumpForce * jumpMult;
+                userData.verticalVelocity = jumpForce;
+                userData.jumpsRemaining--;
+                userData.grounded = false;
+                
+                if (isPlayer) {
+                    gameState.jumpsRemaining = userData.jumpsRemaining;
+                }
+                
+                // Show jump trail
+                const trail = car.getObjectByName('jumpTrail');
+                if (trail) {
+                    trail.visible = true;
+                    setTimeout(() => { trail.visible = false; }, 200);
+                }
+            }
+            
+            // Update boost flame
+            const flame = car.getObjectByName('boostFlame');
+            if (flame) {
+                flame.visible = boosting;
+                if (boosting) {
+                    flame.scale.setScalar(0.8 + Math.random() * 0.4);
+                }
+            }
+            
+            // Apply turning
+            const minTurnSpeed = 0.15;
+            const turnFactor = Math.abs(userData.speed) > minTurnSpeed ? 
+                (userData.speed > 0 ? 1 : -1) : 
+                (inputs.forward ? 1 : (inputs.backward ? -1 : 0));
+            
+            if (turnFactor !== 0) {
+                const speedFactor = Math.min(1, Math.abs(userData.speed) * 1.5 + 0.3);
+                car.rotation.y += turning * turnFactor * speedFactor;
+            }
+            
+            // Aerial control
+            if (!userData.grounded) {
+                car.rotation.y += turning * 0.5;
+            }
+            
+            const forward = new THREE.Vector3(0, 0, 1);
+            forward.applyQuaternion(car.quaternion);
+            
+            userData.speed += acceleration;
+            userData.speed *= CONFIG.carFriction;
+            
+            const maxSpeed = boosting ? CONFIG.carMaxSpeed * CONFIG.boostMultiplier : CONFIG.carMaxSpeed;
+            userData.speed = Math.max(-CONFIG.carMaxSpeed * 0.5, Math.min(maxSpeed, userData.speed));
+            
+            if (Math.abs(userData.speed) < 0.01) userData.speed = 0;
+            
+            userData.velocity.copy(forward).multiplyScalar(userData.speed);
+            
+            // Apply gravity and vertical movement
+            userData.verticalVelocity -= CONFIG.gravity;
+            car.position.y += userData.verticalVelocity;
+            
+            // Ground collision
+            if (car.position.y <= 0) {
+                car.position.y = 0;
+                userData.verticalVelocity = 0;
+                if (!userData.grounded) {
+                    userData.grounded = true;
+                    userData.jumpsRemaining = CONFIG.maxJumps;
+                    if (isPlayer) {
+                        gameState.jumpsRemaining = CONFIG.maxJumps;
+                    }
+                }
+            }
+            
+            // Ceiling collision
+            if (car.position.y > CONFIG.arenaHeight - CONFIG.carHeight) {
+                car.position.y = CONFIG.arenaHeight - CONFIG.carHeight;
+                userData.verticalVelocity = -userData.verticalVelocity * 0.5;
+            }
+            
+            car.position.add(userData.velocity);
+            
+            // Arena boundaries
+            const halfWidth = CONFIG.arenaWidth / 2 - CONFIG.carWidth;
+            const halfLength = CONFIG.arenaLength / 2 - CONFIG.carLength;
+            
+            const inGoalArea = Math.abs(car.position.x) < CONFIG.goalWidth / 2;
+            const goalBoundary = inGoalArea ? halfLength + CONFIG.goalDepth : halfLength;
+            
+            if (car.position.x < -halfWidth) {
+                car.position.x = -halfWidth;
+                userData.speed *= 0.3;
+            }
+            if (car.position.x > halfWidth) {
+                car.position.x = halfWidth;
+                userData.speed *= 0.3;
+            }
+            if (car.position.z < -goalBoundary) {
+                car.position.z = -goalBoundary;
+                userData.speed *= 0.3;
+            }
+            if (car.position.z > goalBoundary) {
+                car.position.z = goalBoundary;
+                userData.speed *= 0.3;
+            }
+        }
+
+        // ===== BALL PHYSICS =====
+        function updateBall(deltaTime) {
+            const userData = ball.userData;
+            
+            if (ball.position.y > CONFIG.ballRadius) {
+                userData.velocity.y -= CONFIG.gravity;
+            }
+            
+            userData.velocity.x *= CONFIG.ballFriction;
+            userData.velocity.z *= CONFIG.ballFriction;
+            
+            ball.position.add(userData.velocity);
+            
+            if (ball.position.y < CONFIG.ballRadius) {
+                ball.position.y = CONFIG.ballRadius;
+                userData.velocity.y *= -CONFIG.ballBounce;
+                userData.velocity.x *= 0.95;
+                userData.velocity.z *= 0.95;
+            }
+            
+            if (ball.position.y > CONFIG.arenaHeight - CONFIG.ballRadius) {
+                ball.position.y = CONFIG.arenaHeight - CONFIG.ballRadius;
+                userData.velocity.y *= -CONFIG.ballBounce;
+            }
+            
+            const halfWidth = CONFIG.arenaWidth / 2 - CONFIG.ballRadius;
+            const halfLength = CONFIG.arenaLength / 2 - CONFIG.ballRadius;
+            
+            if (ball.position.x < -halfWidth) {
+                ball.position.x = -halfWidth;
+                userData.velocity.x *= -CONFIG.ballBounce;
+            }
+            if (ball.position.x > halfWidth) {
+                ball.position.x = halfWidth;
+                userData.velocity.x *= -CONFIG.ballBounce;
+            }
+            
+            const inGoalX = Math.abs(ball.position.x) < CONFIG.goalWidth / 2 - CONFIG.ballRadius;
+            const inGoalY = ball.position.y < CONFIG.goalHeight - CONFIG.ballRadius;
+            
+            if (ball.position.z < -halfLength) {
+                if (inGoalX && inGoalY) {
+                    if (ball.position.z < -halfLength - CONFIG.goalDepth + CONFIG.ballRadius) {
+                        if (!gameState.goalScored) scoreGoal('enemy');
+                    }
+                } else {
+                    ball.position.z = -halfLength;
+                    userData.velocity.z *= -CONFIG.ballBounce;
+                }
+            }
+            
+            if (ball.position.z > halfLength) {
+                if (inGoalX && inGoalY) {
+                    if (ball.position.z > halfLength + CONFIG.goalDepth - CONFIG.ballRadius) {
+                        if (!gameState.goalScored) scoreGoal('player');
+                    }
+                } else {
+                    ball.position.z = halfLength;
+                    userData.velocity.z *= -CONFIG.ballBounce;
+                }
+            }
+            
+            const speed = userData.velocity.length();
+            if (speed > 0.01) {
+                const rotationAxis = new THREE.Vector3(-userData.velocity.z, 0, userData.velocity.x).normalize();
+                ball.rotateOnWorldAxis(rotationAxis, speed * 0.1);
+            }
+        }
+
+        // ===== CAR-BALL COLLISION =====
+        function checkCarBallCollision(car) {
+            const carPos = car.position.clone();
+            const ballPos = ball.position.clone();
+            
+            const distance = carPos.distanceTo(ballPos);
+            const collisionDist = CONFIG.ballRadius + Math.max(CONFIG.carWidth, CONFIG.carLength) / 2 + 0.5;
+            
+            if (distance < collisionDist) {
+                const normal = ballPos.clone().sub(carPos).normalize();
+                
+                const overlap = collisionDist - distance;
+                ball.position.add(normal.clone().multiplyScalar(overlap + 0.1));
+                
+                const carVelocity = car.userData.velocity.clone();
+                carVelocity.y = car.userData.verticalVelocity;
+                
+                const relativeVelocity = ball.userData.velocity.clone().sub(carVelocity);
+                const velocityAlongNormal = relativeVelocity.dot(normal);
+                
+                if (velocityAlongNormal < 0) {
+                    const restitution = 1.3;
+                    const impulse = -(1 + restitution) * velocityAlongNormal;
+                    
+                    ball.userData.velocity.add(normal.clone().multiplyScalar(impulse));
+                    
+                    const carSpeed = car.userData.speed;
+                    const carForward = new THREE.Vector3(0, 0, 1).applyQuaternion(car.quaternion);
+                    ball.userData.velocity.add(carForward.multiplyScalar(carSpeed * 1.8));
+                    
+                    // Add vertical velocity from car
+                    ball.userData.velocity.y += car.userData.verticalVelocity * 0.8;
+                    
+                    if (car.userData.boosting) {
+                        ball.userData.velocity.y += 0.4;
+                        ball.userData.velocity.multiplyScalar(1.2);
+                    }
+                    
+                    // Aerial hit bonus
+                    if (!car.userData.grounded) {
+                        ball.userData.velocity.multiplyScalar(1.3);
+                    }
+                    
+                    const maxBallSpeed = 3.0;
+                    if (ball.userData.velocity.length() > maxBallSpeed) {
+                        ball.userData.velocity.normalize().multiplyScalar(maxBallSpeed);
+                    }
+                }
+            }
+        }
+
+        // ===== CAR-CAR COLLISION =====
+        function checkCarCarCollision() {
+            const distance = playerCar.position.distanceTo(enemyCar.position);
+            const minDistance = CONFIG.carLength;
+            
+            if (distance < minDistance) {
+                const normal = playerCar.position.clone().sub(enemyCar.position).normalize();
+                const overlap = minDistance - distance;
+                
+                playerCar.position.add(normal.clone().multiplyScalar(overlap / 2));
+                enemyCar.position.add(normal.clone().multiplyScalar(-overlap / 2));
+                
+                const temp = playerCar.userData.speed;
+                playerCar.userData.speed = enemyCar.userData.speed * 0.5;
+                enemyCar.userData.speed = temp * 0.5;
+            }
+        }
+
+        // ===== IMPROVED AI WITH JUMPING =====
+        function updateEnemyAI(deltaTime) {
+            const ai = enemyCar;
+            const aiPos = ai.position.clone();
+            const ballPos = ball.position.clone();
+            const ballVel = ball.userData.velocity.clone();
+            
+            const preset = AI_PRESETS[settings.difficulty];
+            
+            const predictionTime = preset.predictionTime * 60;
+            const predictedBall = ballPos.clone().add(ballVel.clone().multiplyScalar(predictionTime));
+            
+            predictedBall.x = Math.max(-CONFIG.arenaWidth/2 + 5, Math.min(CONFIG.arenaWidth/2 - 5, predictedBall.x));
+            predictedBall.z = Math.max(-CONFIG.arenaLength/2 + 5, Math.min(CONFIG.arenaLength/2 - 5, predictedBall.z));
+            
+            const ballZone = ballPos.z;
+            const playerGoalZ = -CONFIG.arenaLength / 2;
+            const enemyGoalZ = CONFIG.arenaLength / 2;
+            
+            let targetPos = new THREE.Vector3();
+            let shouldBoost = false;
+            let shouldJump = false;
+            
+            const distToBall = aiPos.distanceTo(ballPos);
+            const ballToEnemyGoal = enemyGoalZ - ballPos.z;
+            
+            // AI decision making
+            if (ballZone > CONFIG.arenaLength * 0.1) {
+                const defensiveX = predictedBall.x * 0.7;
+                const defensiveZ = Math.min(enemyGoalZ - 8, Math.max(predictedBall.z + 3, 5));
+                targetPos.set(defensiveX, 0, defensiveZ);
+                
+                if (ballToEnemyGoal < 15) {
+                    targetPos.copy(predictedBall);
+                    targetPos.z -= 2;
+                    shouldBoost = true;
+                    
+                    // Jump to block aerial balls
+                    if (ballPos.y > 3 && distToBall < 15) {
+                        shouldJump = Math.random() < preset.jumpChance;
+                    }
+                }
+            } else if (ballZone < -CONFIG.arenaLength * 0.1) {
+                const attackAngle = Math.atan2(predictedBall.x, predictedBall.z - playerGoalZ);
+                const approachDist = 3;
+                
+                targetPos.set(
+                    predictedBall.x - Math.sin(attackAngle) * approachDist,
+                    0,
+                    predictedBall.z - Math.cos(attackAngle) * approachDist
+                );
+                
+                if (distToBall > 15) shouldBoost = true;
+                
+                // Jump to hit aerial balls
+                if (ballPos.y > 2 && distToBall < 10) {
+                    shouldJump = Math.random() < preset.jumpChance * 1.5;
+                }
+            } else {
+                targetPos.copy(predictedBall);
+                if (distToBall > 5) targetPos.z += 3;
+                shouldBoost = distToBall > 20;
+                
+                // Contest aerial balls
+                if (ballPos.y > 2.5 && distToBall < 12) {
+                    shouldJump = Math.random() < preset.jumpChance;
+                }
+            }
+            
+            const accuracyOffset = (1 - preset.accuracy) * 5;
+            targetPos.x += (Math.random() - 0.5) * accuracyOffset;
+            targetPos.z += (Math.random() - 0.5) * accuracyOffset;
+            
+            const toTarget = targetPos.clone().sub(aiPos);
+            const distanceToTarget = toTarget.length();
+            const angleToTarget = Math.atan2(toTarget.x, toTarget.z);
+            
+            let currentAngle = ai.rotation.y;
+            while (currentAngle > Math.PI) currentAngle -= Math.PI * 2;
+            while (currentAngle < -Math.PI) currentAngle += Math.PI * 2;
+            
+            let angleDiff = angleToTarget - currentAngle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            
+            const aiInputs = {
+                forward: false,
+                backward: false,
+                left: false,
+                right: false,
+                boost: false,
+                jump: false
+            };
+            
+            const turnThreshold = 0.08;
+            if (angleDiff > turnThreshold) aiInputs.left = true;
+            else if (angleDiff < -turnThreshold) aiInputs.right = true;
+            
+            if (distanceToTarget > 2) {
+                if (Math.abs(angleDiff) < Math.PI / 2.5) {
+                    aiInputs.forward = true;
+                    
+                    if (shouldBoost && gameState.aiBoost > 20 && Math.random() < preset.boostChance) {
+                        aiInputs.boost = true;
+                        gameState.aiBoost -= CONFIG.boostDrain;
+                    }
+                } else if (Math.abs(angleDiff) > Math.PI * 0.7) {
+                    aiInputs.backward = true;
+                }
+            }
+            
+            // Handle jumping
+            if (shouldJump && ai.userData.jumpsRemaining > 0 && Math.random() < 0.1) {
+                aiInputs.jump = true;
+            }
+            
+            if (!aiInputs.boost) {
+                gameState.aiBoost = Math.min(CONFIG.maxBoost, gameState.aiBoost + CONFIG.boostRecharge);
+            }
+            
+            // Update AI car with speed multiplier
+            updateCarAI(ai, aiInputs, deltaTime, preset.speedMultiplier);
+        }
+
+        function updateCarAI(car, inputs, deltaTime, speedMult) {
+            const userData = car.userData;
+            let acceleration = 0;
+            let turning = 0;
+            
+            if (inputs.forward) acceleration = CONFIG.carAcceleration * speedMult;
+            if (inputs.backward) acceleration = -CONFIG.carAcceleration * 0.6 * speedMult;
+            if (inputs.left) turning = CONFIG.carTurnSpeed;
+            if (inputs.right) turning = -CONFIG.carTurnSpeed;
+            
+            if (inputs.boost && inputs.forward) {
+                acceleration *= CONFIG.boostMultiplier * 0.9;
+            }
+            
+            userData.boosting = inputs.boost && inputs.forward;
+            
+            // Handle AI jumping
+            if (inputs.jump && userData.jumpsRemaining > 0) {
+                const jumpForce = userData.jumpsRemaining === CONFIG.maxJumps ? 
+                    CONFIG.jumpForce : CONFIG.doubleJumpForce;
+                userData.verticalVelocity = jumpForce;
+                userData.jumpsRemaining--;
+                userData.grounded = false;
+                
+                const trail = car.getObjectByName('jumpTrail');
+                if (trail) {
+                    trail.visible = true;
+                    setTimeout(() => { trail.visible = false; }, 200);
+                }
+            }
+            
+            const flame = car.getObjectByName('boostFlame');
+            if (flame) {
+                flame.visible = userData.boosting;
+                if (userData.boosting) flame.scale.setScalar(0.8 + Math.random() * 0.4);
+            }
+            
+            const minTurnSpeed = 0.1;
+            const turnFactor = Math.abs(userData.speed) > minTurnSpeed ? 
+                (userData.speed > 0 ? 1 : -1) : 
+                (inputs.forward ? 1 : (inputs.backward ? -1 : 0));
+            
+            if (turnFactor !== 0) {
+                const speedFactor = Math.min(1, Math.abs(userData.speed) * 1.5 + 0.3);
+                car.rotation.y += turning * turnFactor * speedFactor;
+            }
+            
+            if (!userData.grounded) {
+                car.rotation.y += turning * 0.5;
+            }
+            
+            const forward = new THREE.Vector3(0, 0, 1);
+            forward.applyQuaternion(car.quaternion);
+            
+            userData.speed += acceleration;
+            userData.speed *= CONFIG.carFriction;
+            
+            const maxSpeed = userData.boosting ? CONFIG.carMaxSpeed * CONFIG.boostMultiplier * speedMult : CONFIG.carMaxSpeed * speedMult;
+            userData.speed = Math.max(-CONFIG.carMaxSpeed * 0.4, Math.min(maxSpeed, userData.speed));
+            
+            if (Math.abs(userData.speed) < 0.01) userData.speed = 0;
+            
+            userData.velocity.copy(forward).multiplyScalar(userData.speed);
+            
+            // Gravity
+            userData.verticalVelocity -= CONFIG.gravity;
+            car.position.y += userData.verticalVelocity;
+            
+            if (car.position.y <= 0) {
+                car.position.y = 0;
+                userData.verticalVelocity = 0;
+                if (!userData.grounded) {
+                    userData.grounded = true;
+                    userData.jumpsRemaining = CONFIG.maxJumps;
+                }
+            }
+            
+            if (car.position.y > CONFIG.arenaHeight - CONFIG.carHeight) {
+                car.position.y = CONFIG.arenaHeight - CONFIG.carHeight;
+                userData.verticalVelocity = -userData.verticalVelocity * 0.5;
+            }
+            
+            car.position.add(userData.velocity);
+            
+            const halfWidth = CONFIG.arenaWidth / 2 - CONFIG.carWidth;
+            const halfLength = CONFIG.arenaLength / 2 - CONFIG.carLength;
+            
+            const inGoalArea = Math.abs(car.position.x) < CONFIG.goalWidth / 2;
+            const goalBoundary = inGoalArea ? halfLength + CONFIG.goalDepth : halfLength;
+            
+            car.position.x = Math.max(-halfWidth, Math.min(halfWidth, car.position.x));
+            car.position.z = Math.max(-goalBoundary, Math.min(goalBoundary, car.position.z));
+        }
+
+        // ===== SCORING =====
+        function scoreGoal(scorer) {
+            gameState.goalScored = true;
+            
+            if (scorer === 'player') {
+                gameState.playerScore++;
+                showGoalNotification('player');
+            } else {
+                gameState.enemyScore++;
+                showGoalNotification('enemy');
+            }
+            
+            updateScoreDisplay();
+            gameState.resetTimer = 2;
+        }
+
+        function showGoalNotification(scorer) {
+            const notification = document.getElementById('goal-notification');
+            notification.textContent = 'GOAL!';
+            notification.className = scorer === 'player' ? 'show player-goal' : 'show enemy-goal';
+            
+            setTimeout(() => { notification.className = ''; }, 1500);
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('player-score').textContent = gameState.playerScore;
+            document.getElementById('enemy-score').textContent = gameState.enemyScore;
+        }
+
+        // ===== CAMERA =====
+        function updateCamera() {
+            const carPos = playerCar.position.clone();
+            const carRotation = playerCar.rotation.y;
+            
+            const baseDist = 18 * settings.cameraDistance;
+            const baseHeight = 10 * settings.cameraHeight;
+            
+            const cameraX = carPos.x - Math.sin(carRotation) * baseDist;
+            const cameraZ = carPos.z - Math.cos(carRotation) * baseDist;
+            const cameraY = Math.max(baseHeight, carPos.y + baseHeight);
+            
+            camera.position.lerp(new THREE.Vector3(cameraX, cameraY, cameraZ), 0.08);
+            
+            const lookAtPos = carPos.clone();
+            lookAtPos.y = carPos.y + 2;
+            lookAtPos.x += Math.sin(carRotation) * 6;
+            lookAtPos.z += Math.cos(carRotation) * 6;
+            
+            camera.lookAt(lookAtPos);
+        }
+
+        // ===== MINIMAP =====
+        const minimapCanvas = document.getElementById('minimap-canvas');
+        const minimapCtx = minimapCanvas.getContext('2d');
+        minimapCanvas.width = 180;
+        minimapCanvas.height = 120;
+
+        function updateMinimap() {
+            const ctx = minimapCtx;
+            const w = minimapCanvas.width;
+            const h = minimapCanvas.height;
+            
+            ctx.fillStyle = 'rgba(20, 20, 40, 0.9)';
+            ctx.fillRect(0, 0, w, h);
+            
+            const scaleX = w / CONFIG.arenaWidth;
+            const scaleZ = h / CONFIG.arenaLength;
+            
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(w/2, 0);
+            ctx.lineTo(w/2, h);
+            ctx.stroke();
+            
+            const goalWidthScaled = CONFIG.goalWidth * scaleX;
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+            ctx.fillRect(w/2 - goalWidthScaled/2, 0, goalWidthScaled, 4);
+            ctx.fillStyle = 'rgba(255, 68, 102, 0.5)';
+            ctx.fillRect(w/2 - goalWidthScaled/2, h - 4, goalWidthScaled, 4);
+            
+            const playerX = (playerCar.position.x + CONFIG.arenaWidth/2) * scaleX;
+            const playerZ = (playerCar.position.z + CONFIG.arenaLength/2) * scaleZ;
+            ctx.fillStyle = '#00ffff';
+            ctx.beginPath();
+            ctx.arc(playerX, playerZ, 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            const enemyX = (enemyCar.position.x + CONFIG.arenaWidth/2) * scaleX;
+            const enemyZ = (enemyCar.position.z + CONFIG.arenaLength/2) * scaleZ;
+            ctx.fillStyle = '#ff4466';
+            ctx.beginPath();
+            ctx.arc(enemyX, enemyZ, 5, 0, Math.PI * 2);
+            ctx.fill();
+            
+            const ballX = (ball.position.x + CONFIG.arenaWidth/2) * scaleX;
+            const ballZ = (ball.position.z + CONFIG.arenaLength/2) * scaleZ;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(ballX, ballZ, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // ===== UI UPDATES =====
+        function updateUI() {
+            const minutes = Math.floor(gameState.timeRemaining / 60);
+            const seconds = Math.floor(gameState.timeRemaining % 60);
+            const timerEl = document.getElementById('timer');
+            timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (gameState.timeRemaining <= 30) {
+                timerEl.classList.add('warning');
+            } else {
+                timerEl.classList.remove('warning');
+            }
+            
+            const boostFill = document.getElementById('boost-fill');
+            boostFill.style.width = `${gameState.boost}%`;
+            
+            const speed = Math.abs(playerCar.userData.speed) * 100;
+            document.getElementById('speed-value').textContent = Math.floor(speed);
+            
+            // Update jump indicators
+            const jump1 = document.getElementById('jump1');
+            const jump2 = document.getElementById('jump2');
+            
+            jump1.classList.toggle('available', gameState.jumpsRemaining >= 1);
+            jump2.classList.toggle('available', gameState.jumpsRemaining >= 2);
+        }
+
+        // ===== PAUSE SYSTEM =====
+        function togglePause() {
+            if (!gameState.running) return;
+            
+            gameState.paused = !gameState.paused;
+            document.getElementById('pause-menu').classList.toggle('show', gameState.paused);
+        }
+
+        function resumeGame() {
+            gameState.paused = false;
+            document.getElementById('pause-menu').classList.remove('show');
+        }
+
+        // ===== SETTINGS =====
+        function openSettings() {
+            document.getElementById('settings-menu').classList.add('show');
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-menu').classList.remove('show');
+        }
+
+        function updateDifficultyDisplay() {
+            document.getElementById('diff-text').textContent = settings.difficulty.toUpperCase();
+        }
+
+        // Settings event listeners
+        document.querySelectorAll('.diff-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                settings.difficulty = btn.dataset.diff;
+                updateDifficultyDisplay();
+            });
+        });
+
+        document.getElementById('steer-sens').addEventListener('input', (e) => {
+            settings.steerSensitivity = e.target.value / 100;
+            document.getElementById('steer-sens-val').textContent = e.target.value + '%';
+        });
+
+        document.getElementById('accel-sens').addEventListener('input', (e) => {
+            settings.accelSensitivity = e.target.value / 100;
+            document.getElementById('accel-sens-val').textContent = e.target.value + '%';
+        });
+
+        document.getElementById('jump-sens').addEventListener('input', (e) => {
+            settings.jumpSensitivity = e.target.value / 100;
+            document.getElementById('jump-sens-val').textContent = e.target.value + '%';
+        });
+
+        document.getElementById('cam-dist').addEventListener('input', (e) => {
+            settings.cameraDistance = e.target.value / 100;
+            document.getElementById('cam-dist-val').textContent = e.target.value + '%';
+        });
+
+        document.getElementById('cam-height').addEventListener('input', (e) => {
+            settings.cameraHeight = e.target.value / 100;
+            document.getElementById('cam-height-val').textContent = e.target.value + '%';
+        });
+
+        // ===== GAME LOOP =====
+        let lastTime = 0;
+
+        function gameLoop(currentTime) {
+            requestAnimationFrame(gameLoop);
+            
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+            
+            if (!gameState.running || gameState.paused) {
+                renderer.render(scene, camera);
+                return;
+            }
+            
+            gameState.timeRemaining -= deltaTime;
+            if (gameState.timeRemaining <= 0) {
+                endGame();
+                return;
+            }
+            
+            if (gameState.goalScored) {
+                gameState.resetTimer -= deltaTime;
+                if (gameState.resetTimer <= 0) {
+                    gameState.goalScored = false;
+                    resetPositions();
+                }
+            } else {
+                // Clear jump input after processing
+                const jumpInput = keys.jump;
+                updateCar(playerCar, keys, deltaTime, true);
+                keys.jump = false;
+                
+                updateEnemyAI(deltaTime);
+                updateBall(deltaTime);
+                
+                checkCarBallCollision(playerCar);
+                checkCarBallCollision(enemyCar);
+                checkCarCarCollision();
+            }
+            
+            updateCamera();
+            updateMinimap();
+            updateUI();
+            
+            renderer.render(scene, camera);
+        }
+
+        // ===== GAME START/END =====
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('pause-menu').classList.remove('show');
+            document.getElementById('game-over').classList.remove('show');
+            document.getElementById('settings-menu').classList.remove('show');
+            
+            gameState = {
+                running: true,
+                paused: false,
+                timeRemaining: CONFIG.matchDuration,
+                playerScore: 0,
+                enemyScore: 0,
+                boost: CONFIG.maxBoost,
+                aiBoost: CONFIG.maxBoost,
+                goalScored: false,
+                resetTimer: 0,
+                jumpsRemaining: CONFIG.maxJumps,
+                aiJumpsRemaining: CONFIG.maxJumps
+            };
+            
+            resetPositions();
+            updateScoreDisplay();
+            updateDifficultyDisplay();
+        }
+
+        function endGame() {
+            gameState.running = false;
+            
+            const gameOverScreen = document.getElementById('game-over');
+            const resultText = document.getElementById('result-text');
+            const finalScore = document.getElementById('final-score');
+            
+            finalScore.textContent = `${gameState.playerScore} - ${gameState.enemyScore}`;
+            
+            if (gameState.playerScore > gameState.enemyScore) {
+                resultText.textContent = 'VICTORY!';
+                resultText.className = 'win';
+            } else if (gameState.playerScore < gameState.enemyScore) {
+                resultText.textContent = 'DEFEAT';
+                resultText.className = 'lose';
+            } else {
+                resultText.textContent = 'DRAW';
+                resultText.className = 'draw';
+            }
+            
+            gameOverScreen.classList.add('show');
+        }
+
+        function restartGame() {
+            document.getElementById('game-over').classList.remove('show');
+            document.getElementById('pause-menu').classList.remove('show');
+            startGame();
+        }
+
+        function quitToMenu() {
+            gameState.running = false;
+            gameState.paused = false;
+            document.getElementById('pause-menu').classList.remove('show');
+            document.getElementById('start-screen').classList.remove('hidden');
+            resetPositions();
+        }
+
+        // ===== EVENT LISTENERS =====
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', restartGame);
+        document.getElementById('resume-btn').addEventListener('click', resumeGame);
+        document.getElementById('restart-btn-pause').addEventListener('click', restartGame);
+        document.getElementById('quit-btn').addEventListener('click', quitToMenu);
+        document.getElementById('settings-btn').addEventListener('click', openSettings);
+        document.getElementById('settings-btn-pause').addEventListener('click', openSettings);
+        document.getElementById('back-settings-btn').addEventListener('click', closeSettings);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        requestAnimationFrame(gameLoop);
+
+        camera.position.set(0, 30, -50);
+        camera.lookAt(0, 0, 0);
+    </script>
+</body>
+</html>
